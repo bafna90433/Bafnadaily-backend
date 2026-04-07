@@ -50,6 +50,7 @@ export interface ISiteSettings extends Document {
   freeShippingAbove: number;
   standardShippingCharge: number;
   giftWrapCharge: number;
+  promoText: string;
 
   // B2B / Wholesale
   b2bEnabled: boolean;
@@ -111,6 +112,7 @@ const siteSettingsSchema = new Schema<ISiteSettings>(
     freeShippingAbove: { type: Number, default: 499 },
     standardShippingCharge: { type: Number, default: 49 },
     giftWrapCharge: { type: Number, default: 29 },
+    promoText: { type: String, default: '🚚 Free Delivery on orders above ₹499 | COD Available 🎁' },
 
     b2bEnabled: { type: Boolean, default: true },
     moqPolicy: {

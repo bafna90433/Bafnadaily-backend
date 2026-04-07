@@ -32,6 +32,8 @@ router.get('/public', async (req: Request, res: Response) => {
         codAdvancePercent: s.codAdvancePercent,
         codFlatCharge: s.codFlatCharge,
         upiEnabled: s.upiEnabled,
+        upiId: s.upiId,
+        promoText: s.promoText,
         freeShippingAbove: s.freeShippingAbove,
         standardShippingCharge: s.standardShippingCharge,
         giftWrapCharge: s.giftWrapCharge,
