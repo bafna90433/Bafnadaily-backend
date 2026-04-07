@@ -24,6 +24,7 @@ app.use(cors({
     'http://localhost:3001',
     'https://admin.bafnadaily.com',
     'https://bafnadaily.com',
+    'https://bafnadaily-admin.pages.dev',
     'http://admin.bafnadaily.com',
     'http://bafnadaily.com'
   ],
