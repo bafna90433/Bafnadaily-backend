@@ -60,6 +60,12 @@ export interface ISiteSettings extends Document {
     abovePriceQty: number;   // 2 pieces
   };
 
+  // Domains
+  subdomain: string;
+  customDomain: string;
+  adminSubdomain: string;
+  adminCustomDomain: string;
+
   // Maintenance
   maintenanceMode: boolean;
   maintenanceMessage: string;
@@ -120,6 +126,11 @@ const siteSettingsSchema = new Schema<ISiteSettings>(
       belowPriceQty: { type: Number, default: 3 },
       abovePriceQty: { type: Number, default: 2 },
     },
+
+    subdomain: { type: String, unique: true, sparse: true, lowercase: true, trim: true },
+    customDomain: { type: String, unique: true, sparse: true, lowercase: true, trim: true },
+    adminSubdomain: { type: String, unique: true, sparse: true, lowercase: true, trim: true },
+    adminCustomDomain: { type: String, unique: true, sparse: true, lowercase: true, trim: true },
 
     maintenanceMode: { type: Boolean, default: false },
     maintenanceMessage: { type: String, default: 'We are upgrading our store. Back soon!' },

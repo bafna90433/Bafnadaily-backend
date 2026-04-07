@@ -19,7 +19,14 @@ connectDB();
 const app = express();
 
 app.use(cors({
-  origin: ['http://localhost:3000','http://localhost:3001','*'],
+  origin: [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'https://admin.bafnadaily.com',
+    'https://bafnadaily.com',
+    'http://admin.bafnadaily.com',
+    'http://bafnadaily.com'
+  ],
   credentials: true,
 }));
 app.use(express.json({ limit: '50mb' }));
