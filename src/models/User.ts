@@ -56,8 +56,8 @@ const userSchema = new Schema<IUser>(
 );
 
 userSchema.methods.getSignedToken = function () {
-  return jwt.sign({ id: this._id }, process.env.JWT_SECRET as string, {
-    expiresIn: process.env.JWT_EXPIRE as string,
+  return jwt.sign({ id: this._id }, (process.env.JWT_SECRET as string), {
+    expiresIn: (process.env.JWT_EXPIRE as any),
   });
 };
 
@@ -106,8 +106,8 @@ adminSchema.methods.matchPassword = async function (entered: string) {
 };
 
 adminSchema.methods.getSignedToken = function () {
-  return jwt.sign({ id: this._id, role: this.role }, process.env.ADMIN_JWT_SECRET as string, {
-    expiresIn: process.env.ADMIN_JWT_EXPIRE as string,
+  return jwt.sign({ id: this._id, role: this.role }, (process.env.ADMIN_JWT_SECRET as string), {
+    expiresIn: (process.env.ADMIN_JWT_EXPIRE as any),
   });
 };
 

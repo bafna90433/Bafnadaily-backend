@@ -21,6 +21,8 @@ export interface IOrder extends Document {
   notes?: string;
   trackingNumber?: string;
   estimatedDelivery?: Date;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 const orderSchema = new Schema<IOrder>(
