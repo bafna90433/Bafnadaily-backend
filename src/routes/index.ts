@@ -145,11 +145,10 @@ productsRouter.post('/decode-barcode', adminProtect, upload.single('image'), asy
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'No image uploaded' });
 
-    const result = await javascriptBarcodeReader({
+    const result = await (javascriptBarcodeReader as any)({
       image: req.file.buffer,
-      options: {
-        // You can specify more formats if needed
-      }
+      barcode: 'code-128',
+      options: {}
     });
 
     if (result) {
