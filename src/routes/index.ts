@@ -1,6 +1,9 @@
 import express, { Request, Response } from 'express';
+import javascriptBarcodeReader from 'javascript-barcode-reader';
+import mongoose from 'mongoose';
 import { Product } from '../models/Product';
 import { Category } from '../models/Product';
+import { InventoryLog } from '../models/InventoryLog';
 import { Order, Cart, Wishlist, Banner, Coupon } from '../models/Order';
 import { User } from '../models/User';
 import { protect } from '../middleware/auth';
@@ -20,13 +23,39 @@ productsRouter.get('/', async (req: Request, res: Response) => {
   try {
     const { category, search, minPrice, maxPrice, sort, page = 1, limit = 20, featured, trending, newArrival, bestSeller, tag } = req.query as any;
     const query: any = { isActive: true };
-    if (category) query.category = category;
+    
+    if (category) {
+      if (mongoose.Types.ObjectId.isValid(category)) {
+        query.category = category;
+      } else {
+        // Find category by name if it's not a valid ObjectId
+        const foundCat = await Category.findOne({ name: new RegExp(`^${category}$`, 'i'), isActive: true });
+        if (foundCat) {
+          query.category = foundCat._id;
+        } else {
+          // If category name not found, return empty results early or search for non-existent ID
+          return res.json({ success: true, products: [], total: 0, page: Number(page), pages: 0 });
+        }
+      }
+    }
     if (featured === 'true') query.isFeatured = true;
     if (trending === 'true') query.isTrending = true;
     if (newArrival === 'true') query.isNewArrival = true;
     if (bestSeller === 'true') query.isBestSeller = true;
     if (tag) query.tags = { $in: [tag] };
-    if (search) query.$text = { $search: search };
+    if (search) {
+      if (search.match(/^[a-zA-Z0-9]+$/)) {
+        // If search looks like a barcode or SKU, prioritize exact match
+        query.$or = [
+          { barcode: search },
+          { sku: search },
+          { name: { $regex: search, $options: 'i' } }
+        ];
+      } else {
+        // Otherwise use traditional name search
+        query.name = { $regex: search, $options: 'i' };
+      }
+    }
     if (minPrice || maxPrice) {
       query.price = {};
       if (minPrice) query.price.$gte = Number(minPrice);
@@ -53,6 +82,16 @@ productsRouter.get('/by-id/:id', adminProtect, async (req: Request, res: Respons
   try {
     const product = await Product.findById(req.params.id).populate('category', 'name slug');
     if (!product) return res.status(404).json({ success: false, message: 'Not found' });
+    res.json({ success: true, product });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+productsRouter.get('/details/:id', async (req: Request, res: Response) => {
+  try {
+    const product = await Product.findById(req.params.id)
+      .populate('category', 'name slug')
+      .populate('reviews.user', 'name avatar');
+    if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
     res.json({ success: true, product });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -99,6 +138,73 @@ productsRouter.delete('/:id', adminProtect, async (req: Request, res: Response) 
   try {
     await Product.findByIdAndUpdate(req.params.id, { isActive: false });
     res.json({ success: true, message: 'Product deleted' });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+productsRouter.post('/decode-barcode', adminProtect, upload.single('image'), async (req: any, res: Response) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, message: 'No image uploaded' });
+
+    const result = await javascriptBarcodeReader({
+      image: req.file.buffer,
+      options: {
+        // You can specify more formats if needed
+      }
+    });
+
+    if (result) {
+      res.json({ success: true, barcode: result });
+    } else {
+      res.status(404).json({ success: false, message: 'No barcode detected in the image' });
+    }
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: `Decoding failed: ${err.message || 'Unknown error'}` });
+  }
+});
+
+productsRouter.put('/update-stock/barcode', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { barcode, quantity = 1, type = 'inward' } = req.body;
+    if (!barcode) return res.status(400).json({ success: false, message: 'Barcode is required' });
+    
+    const qty = Number(quantity);
+    if (isNaN(qty) || qty <= 0) return res.status(400).json({ success: false, message: 'Invalid quantity' });
+
+    const product = await Product.findOne({ barcode });
+    if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
+
+    const oldStock = product.stock;
+    if (type === 'outward') {
+      if (product.stock < qty) {
+        return res.status(400).json({ success: false, message: `Insufficient stock! Current: ${product.stock}, Trying to remove: ${qty}` });
+      }
+      product.stock -= qty;
+    } else {
+      product.stock += qty;
+    }
+
+    await product.save();
+
+    // Create log
+    await InventoryLog.create({
+      productId: product._id,
+      type,
+      quantity: qty,
+      oldStock,
+      newStock: product.stock,
+      note: `Stock ${type} via Mobile Scanner`
+    });
+
+    res.json({ success: true, message: `Stock ${type === 'inward' ? 'added' : 'removed'} successfully`, product });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+productsRouter.get('/inventory/logs/:productId', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const logs = await InventoryLog.find({ productId: req.params.productId })
+      .sort({ createdAt: -1 })
+      .limit(50);
+    res.json({ success: true, logs });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 

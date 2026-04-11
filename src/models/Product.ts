@@ -59,6 +59,7 @@ export interface IProduct extends Document {
   color: string[];
   weight?: number;
   sold: number;
+  barcode?: string;
 }
 
 const productSchema = new Schema<IProduct>(
@@ -90,6 +91,7 @@ const productSchema = new Schema<IProduct>(
     color: [String],
     weight: Number,
     sold: { type: Number, default: 0 },
+    barcode: { type: String, unique: true, sparse: true },
   },
   { timestamps: true }
 );
@@ -103,6 +105,6 @@ productSchema.pre('save', function (next) {
   next();
 });
 
-productSchema.index({ name: 'text', description: 'text', tags: 'text' });
+productSchema.index({ name: 'text', description: 'text', tags: 'text', barcode: 'text' });
 
 export const Product = mongoose.model<IProduct>('Product', productSchema);

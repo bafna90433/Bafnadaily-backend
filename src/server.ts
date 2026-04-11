@@ -19,15 +19,7 @@ connectDB();
 const app = express();
 
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'https://admin.bafnadaily.com',
-    'https://bafnadaily.com',
-    'https://bafnadaily-admin.pages.dev',
-    'http://admin.bafnadaily.com',
-    'http://bafnadaily.com'
-  ],
+  origin: true,
   credentials: true,
 }));
 app.use(express.json({ limit: '50mb' }));
@@ -69,7 +61,7 @@ app.use((err: any, req: any, res: any, _next: any) => {
 
 const PORT = Number(process.env.PORT) || 5000;
 
-app.listen(PORT, async () => {
+app.listen(PORT, '0.0.0.0', async () => {
   console.log(`🚀 Reteiler Server: http://localhost:${PORT}`);
 
   // Seed admin

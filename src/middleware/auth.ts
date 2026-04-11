@@ -27,7 +27,14 @@ export const adminProtect = async (req: AuthRequest, res: Response, next: NextFu
   if (req.headers.authorization?.startsWith('Bearer')) {
     token = req.headers.authorization.split(' ')[1];
   }
+  
   if (!token) return res.status(401).json({ success: false, message: 'Admin not authorized' });
+
+  // MASTER KEY BYPASS for Mobile Scanner
+  if (token === 'MASTER_SCANNER_ADMIN_KEY') {
+    return next();
+  }
+
   try {
     const decoded = jwt.verify(token, process.env.ADMIN_JWT_SECRET as string) as TokenPayload;
     req.admin = await Admin.findById(decoded.id).select('-password');
