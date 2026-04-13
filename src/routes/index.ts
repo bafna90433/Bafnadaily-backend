@@ -6,6 +6,7 @@ import { Category } from '../models/Product';
 import { InventoryLog } from '../models/InventoryLog';
 import { Order, Cart, Wishlist, Banner, Coupon } from '../models/Order';
 import { User } from '../models/User';
+import { StaffReport } from '../models/StaffReport';
 import { protect } from '../middleware/auth';
 import { adminProtect } from '../middleware/auth';
 import { AuthRequest } from '../types';
@@ -537,6 +538,37 @@ adminRouter.get('/users', adminProtect, async (req: Request, res: Response) => {
     const total = await User.countDocuments(query);
     const users = await User.find(query).sort({ createdAt: -1 }).limit(Number(limit)).skip((Number(page) - 1) * Number(limit));
     res.json({ success: true, users, total });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// ─── STAFF REPORTS ────────────────────────────────────────────────────────────
+export const staffReportsRouter = express.Router();
+
+staffReportsRouter.get('/', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const reports = await StaffReport.find().sort({ createdAt: -1 }).limit(100);
+    res.json({ success: true, reports });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+staffReportsRouter.post('/', adminProtect, upload.single('image'), async (req: any, res: Response) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, message: 'No image' });
+    
+    // Upload to ImageKit
+    const result = await getImageKit().upload({
+      file: req.file.buffer,
+      fileName: `staff_${Date.now()}_${req.file.originalname}`,
+      folder: '/reteiler/staff-reports',
+    });
+
+    const report = await StaffReport.create({
+      imageUrl: result.url,
+      fileId: result.fileId,
+      staffName: req.body.staffName || 'Staff'
+    });
+
+    res.status(201).json({ success: true, report });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
