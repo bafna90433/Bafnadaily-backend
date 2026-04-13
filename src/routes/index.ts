@@ -565,10 +565,64 @@ staffReportsRouter.post('/', adminProtect, upload.single('image'), async (req: a
     const report = await StaffReport.create({
       imageUrl: result.url,
       fileId: result.fileId,
-      staffName: req.body.staffName || 'Staff'
+      staffName: req.body.staffName || 'Staff',
+      productCode: req.body.productCode
     });
 
     res.status(201).json({ success: true, report });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+staffReportsRouter.patch('/:id', adminProtect, upload.single('image'), async (req: any, res: Response) => {
+  try {
+    const report = await StaffReport.findById(req.params.id);
+    if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
+
+    if (req.body.productCode !== undefined) {
+      report.productCode = req.body.productCode;
+    }
+
+    if (req.file) {
+      // 1. Delete old image from ImageKit
+      if (report.fileId) {
+        try {
+          await getImageKit().deleteFile(report.fileId);
+        } catch (err) {
+          console.error('Failed to delete old image:', err);
+        }
+      }
+
+      // 2. Upload new image
+      const result = await getImageKit().upload({
+        file: req.file.buffer,
+        fileName: `staff_${Date.now()}_${req.file.originalname}`,
+        folder: '/reteiler/staff-reports',
+      });
+
+      report.imageUrl = result.url;
+      report.fileId = result.fileId;
+    }
+
+    await report.save();
+    res.json({ success: true, report });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+staffReportsRouter.delete('/:id', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const report = await StaffReport.findById(req.params.id);
+    if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
+
+    if (report.fileId) {
+      try {
+        await getImageKit().deleteFile(report.fileId);
+      } catch (err) {
+        console.error('Failed to delete image from ImageKit:', err);
+      }
+    }
+
+    await report.deleteOne();
+    res.json({ success: true, message: 'Report deleted successfully' });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
