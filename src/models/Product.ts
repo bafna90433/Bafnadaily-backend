@@ -61,6 +61,7 @@ export interface IProduct extends Document {
   sold: number;
   barcode?: string;
   minQty: number;
+  reorderLevel?: number;
 }
 
 const productSchema = new Schema<IProduct>(
@@ -94,6 +95,7 @@ const productSchema = new Schema<IProduct>(
     sold: { type: Number, default: 0 },
     barcode: { type: String, unique: true, sparse: true },
     minQty: { type: Number, default: 1, min: 1 },
+    reorderLevel: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

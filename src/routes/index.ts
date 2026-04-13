@@ -130,19 +130,7 @@ productsRouter.post('/', adminProtect, async (req: Request, res: Response) => {
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
-productsRouter.put('/:id', adminProtect, async (req: Request, res: Response) => {
-  try {
-    const product = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    res.json({ success: true, product });
-  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
-});
-
-productsRouter.delete('/:id', adminProtect, async (req: Request, res: Response) => {
-  try {
-    await Product.findByIdAndUpdate(req.params.id, { isActive: false });
-    res.json({ success: true, message: 'Product deleted' });
-  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
-});
+// ── Specific routes must come BEFORE wildcard /:id routes ──────────────────
 
 productsRouter.post('/decode-barcode', adminProtect, upload.single('image'), async (req: any, res: Response) => {
   try {
@@ -168,7 +156,7 @@ productsRouter.put('/update-stock/barcode', adminProtect, async (req: Request, r
   try {
     const { barcode, quantity = 1, type = 'inward' } = req.body;
     if (!barcode) return res.status(400).json({ success: false, message: 'Barcode is required' });
-    
+
     const qty = Number(quantity);
     if (isNaN(qty) || qty <= 0) return res.status(400).json({ success: false, message: 'Invalid quantity' });
 
@@ -207,6 +195,20 @@ productsRouter.get('/inventory/logs/:productId', adminProtect, async (req: Reque
       .sort({ createdAt: -1 })
       .limit(50);
     res.json({ success: true, logs });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+productsRouter.put('/:id', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const product = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json({ success: true, product });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+productsRouter.delete('/:id', adminProtect, async (req: Request, res: Response) => {
+  try {
+    await Product.findByIdAndUpdate(req.params.id, { isActive: false });
+    res.json({ success: true, message: 'Product deleted' });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
