@@ -20,6 +20,9 @@ export interface IOrder extends Document {
   giftMessage?: string;
   notes?: string;
   trackingNumber?: string;
+  courierName?: string;
+  packingDetails?: { boxType: string; quantity: number; totalWeight: number }[];
+  wa?: { orderConfirmedSent: boolean; trackingSent: boolean; lastError: string; lastSentAt: Date | null };
   estimatedDelivery?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -44,7 +47,18 @@ const orderSchema = new Schema<IOrder>(
     giftWrapping: { type: Boolean, default: false },
     giftMessage: String,
     notes: String,
-    trackingNumber: String,
+    trackingNumber: { type: String, default: '' },
+    courierName: { type: String, default: '' },
+    packingDetails: {
+      type: [{ boxType: String, quantity: Number, totalWeight: Number }],
+      default: [],
+    },
+    wa: {
+      orderConfirmedSent: { type: Boolean, default: false },
+      trackingSent: { type: Boolean, default: false },
+      lastError: { type: String, default: '' },
+      lastSentAt: { type: Date, default: null },
+    },
     estimatedDelivery: Date,
   },
   { timestamps: true }

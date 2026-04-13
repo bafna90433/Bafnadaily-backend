@@ -1,6 +1,8 @@
 import express, { Request, Response } from 'express';
 import javascriptBarcodeReader from 'javascript-barcode-reader';
 import mongoose from 'mongoose';
+import axios from 'axios';
+import { sendWhatsAppTemplate, sanitizePhone } from '../utils/whatsapp';
 import { Product } from '../models/Product';
 import { Category } from '../models/Product';
 import { InventoryLog } from '../models/InventoryLog';
@@ -349,11 +351,36 @@ ordersRouter.post('/', protect, async (req: AuthRequest, res: Response) => {
       user: req.user._id, items: orderItems, shippingAddress, paymentMethod, couponCode,
       giftWrapping, giftMessage, notes, subtotal, discount, shippingCharge, total,
       paymentId, paymentStatus: paymentId ? 'paid' : 'pending',
-      statusHistory: [{ status: 'placed', note: 'Order placed', updatedAt: new Date() }],
+      orderStatus: 'confirmed',
+      statusHistory: [{ status: 'confirmed', note: 'Order placed', updatedAt: new Date() }],
     });
     await Cart.findOneAndUpdate({ user: req.user._id }, { items: [] });
-    // Update user stats
     await User.findByIdAndUpdate(req.user._id, { $inc: { totalOrders: 1, totalSpent: total } });
+
+    // ── WhatsApp: Order Confirmed ──
+    const fullUser = await User.findById(req.user._id).select('phone whatsapp').lean() as any;
+    const waTo = sanitizePhone(fullUser?.whatsapp || fullUser?.phone || shippingAddress?.phone);
+    if (waTo) {
+      try {
+        await sendWhatsAppTemplate({
+          to: waTo,
+          templateName: process.env.WA_ORDER_TEMPLATE || 'order_confirmed_new',
+          languageCode: 'en_US',
+          components: [{
+            type: 'body',
+            parameters: [
+              { type: 'text', text: String(fullUser?.name || 'Customer') },
+              { type: 'text', text: String(order.orderNumber || '') },
+              { type: 'text', text: String(total) },
+            ],
+          }],
+        });
+        await Order.findByIdAndUpdate(order._id, { 'wa.orderConfirmedSent': true, 'wa.lastSentAt': new Date() });
+      } catch (waErr: any) {
+        await Order.findByIdAndUpdate(order._id, { 'wa.lastError': waErr?.message || 'WA failed' });
+      }
+    }
+
     res.status(201).json({ success: true, order });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -400,14 +427,129 @@ ordersRouter.get('/', adminProtect, async (req: Request, res: Response) => {
 
 ordersRouter.put('/:id/status', adminProtect, async (req: Request, res: Response) => {
   try {
-    const { status, note, trackingNumber } = req.body;
-    const order = await Order.findById(req.params.id);
+    const { status, note, trackingNumber, courierName, packingDetails, shipProvider } = req.body;
+    const order = await Order.findById(req.params.id).populate('user', 'name phone whatsapp') as any;
     if (!order) return res.status(404).json({ success: false, message: 'Not found' });
+
     order.orderStatus = status;
-    if (trackingNumber) order.trackingNumber = trackingNumber;
-    order.statusHistory.push({ status, note, updatedAt: new Date() });
+    order.statusHistory.push({ status, note: note || `Updated to ${status}`, updatedAt: new Date() });
+
+    // ── SHIPPING: Auto AWB generation ──
+    if (status === 'shipped') {
+      const provider = shipProvider || 'manual';
+
+      // ── Delhivery auto AWB ──
+      if (provider === 'delhivery' && packingDetails?.length > 0 && !order.trackingNumber) {
+        try {
+          const BOX_DIMS: Record<string, { l: number; b: number; h: number }> = {
+            A28: { l: 47, b: 36, h: 25 }, A06: { l: 44.5, b: 35, h: 34.5 },
+            A08: { l: 47, b: 35.5, h: 47 }, A31: { l: 89, b: 48, h: 40 },
+            A18: { l: 44, b: 20, h: 45 },
+          };
+          let totalWeightGrams = 0;
+          let dims = BOX_DIMS['A28'];
+          packingDetails.forEach((box: any) => {
+            totalWeightGrams += (Number(box.totalWeight) || 0) * 1000;
+            if (BOX_DIMS[box.boxType]) dims = BOX_DIMS[box.boxType];
+          });
+
+          const addr = order.shippingAddress;
+          const delvPayload = {
+            shipments: [{
+              name: addr.name || 'Customer',
+              add: addr.addressLine1 + (addr.addressLine2 ? ', ' + addr.addressLine2 : ''),
+              pin: addr.pincode, city: addr.city, state: addr.state,
+              country: 'India',
+              phone: addr.phone || order.user?.phone || '9999999999',
+              order: order.orderNumber,
+              payment_mode: order.paymentMethod === 'cod' ? 'COD' : 'Prepaid',
+              cod_amount: order.paymentMethod === 'cod' ? order.total : 0,
+              products_desc: 'Products',
+              seller_name: process.env.SELLER_NAME || 'Bafnadaily',
+              total_amount: order.total,
+              weight: totalWeightGrams,
+              shipping_mode: 'Surface',
+              length: dims.l, breadth: dims.b, height: dims.h,
+            }],
+            pickup_location: { name: process.env.DELHIVERY_PICKUP_LOCATION_NAME || 'PRIMARY' },
+          };
+
+          const delvResp = await axios.post(
+            'https://track.delhivery.com/api/cmu/create.json',
+            `format=json&data=${encodeURIComponent(JSON.stringify(delvPayload))}`,
+            { headers: { Authorization: `Token ${process.env.DELHIVERY_API_KEY}`, 'Content-Type': 'application/x-www-form-urlencoded' } }
+          );
+
+          if (delvResp.data?.success) {
+            order.trackingNumber = delvResp.data.packages[0].waybill;
+            order.courierName = 'Delhivery';
+            order.packingDetails = packingDetails;
+          } else {
+            return res.status(400).json({ success: false, message: 'Delhivery Error: ' + JSON.stringify(delvResp.data?.rmk || delvResp.data) });
+          }
+        } catch (apiErr: any) {
+          return res.status(500).json({ success: false, message: 'Delhivery API failed: ' + apiErr.message });
+        }
+      }
+
+      // ── Shiprocket manual tracking ──
+      if (provider === 'shiprocket' && trackingNumber) {
+        order.trackingNumber = trackingNumber;
+        order.courierName = courierName || 'Shiprocket';
+        order.packingDetails = packingDetails || [];
+      }
+
+      // ── Manual tracking fallback ──
+      if (provider === 'manual' && trackingNumber) {
+        order.trackingNumber = trackingNumber;
+        order.courierName = courierName || '';
+      }
+    }
+
+    if (!order.wa) order.wa = { orderConfirmedSent: false, trackingSent: false, lastError: '', lastSentAt: null };
     await order.save();
-    res.json({ success: true, order });
+
+    // ── WhatsApp: Shipped ──
+    if (status === 'shipped' && order.trackingNumber && !order.wa.trackingSent) {
+      const waTo = sanitizePhone(order.user?.whatsapp || order.user?.phone || order.shippingAddress?.phone);
+      if (waTo) {
+        try {
+          const courier = order.courierName || 'Courier';
+          const trackLink = courier.toLowerCase().includes('delhivery')
+            ? `https://www.delhivery.com/track-v2/package/${order.trackingNumber}`
+            : `https://www.google.com/search?q=${encodeURIComponent(order.trackingNumber + ' tracking')}`;
+
+          await sendWhatsAppTemplate({
+            to: waTo,
+            templateName: process.env.WA_TRACKING_TEMPLATE || 'order_shipped_neya_hai',
+            languageCode: 'en_US',
+            components: [
+              {
+                type: 'body',
+                parameters: [
+                  { type: 'text', text: String(order.user?.name || 'Customer') },
+                  { type: 'text', text: String(order.orderNumber) },
+                  { type: 'text', text: courier },
+                  { type: 'text', text: String(order.trackingNumber) },
+                  { type: 'text', text: trackLink },
+                ],
+              },
+              { type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: String(order._id) }] },
+            ],
+          });
+          order.wa.trackingSent = true;
+          order.wa.lastSentAt = new Date();
+          order.wa.lastError = '';
+          await order.save();
+        } catch (waErr: any) {
+          order.wa.lastError = waErr?.response?.data ? JSON.stringify(waErr.response.data) : waErr.message;
+          await order.save();
+        }
+      }
+    }
+
+    const updated = await Order.findById(order._id).populate('user', 'name phone');
+    res.json({ success: true, order: updated });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 

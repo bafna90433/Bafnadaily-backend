@@ -102,6 +102,20 @@ router.post('/address', protect, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// PUT /api/auth/address/:id  (edit existing)
+router.put('/address/:id', protect, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    const addr = user.addresses.find((a: any) => a._id.toString() === req.params.id);
+    if (!addr) return res.status(404).json({ success: false, message: 'Address not found' });
+    if (req.body.isDefault) user.addresses.forEach((a: any) => (a.isDefault = false));
+    Object.assign(addr, req.body);
+    await user.save();
+    res.json({ success: true, addresses: user.addresses });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 // DELETE /api/auth/address/:id
 router.delete('/address/:id', protect, async (req: AuthRequest, res: Response) => {
   try {

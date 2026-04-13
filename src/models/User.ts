@@ -25,9 +25,16 @@ export interface IUser extends Document {
 }
 
 const addressSchema = new Schema({
-  name: String, phone: String,
-  addressLine1: String, addressLine2: String,
-  city: String, state: String, pincode: String,
+  shopName: { type: String, default: '' },
+  name: { type: String, default: '' },
+  phone: { type: String, default: '' },
+  whatsapp: { type: String, default: '' },
+  gstNumber: { type: String, default: '' },
+  addressLine1: { type: String, default: '' },
+  addressLine2: { type: String, default: '' },
+  city: { type: String, default: '' },
+  state: { type: String, default: '' },
+  pincode: { type: String, default: '' },
   isDefault: { type: Boolean, default: false },
 });
 
