@@ -9,6 +9,8 @@ import { InventoryLog } from '../models/InventoryLog';
 import { Order, Cart, Wishlist, Banner, Coupon } from '../models/Order';
 import { User } from '../models/User';
 import { StaffReport } from '../models/StaffReport';
+import { StaffFolder } from '../models/StaffFolder';
+import { StaffReport as StaffReportModel } from '../models/StaffReport'; // Just in case of conflicts
 import { protect } from '../middleware/auth';
 import { adminProtect } from '../middleware/auth';
 import { AuthRequest } from '../types';
@@ -795,8 +797,96 @@ export const staffReportsRouter = express.Router();
 
 staffReportsRouter.get('/', adminProtect, async (req: Request, res: Response) => {
   try {
-    const reports = await StaffReport.find().sort({ createdAt: -1 }).limit(100);
+    const { folderId } = req.query;
+    const query: any = {};
+    
+    if (folderId === 'root' || !folderId) {
+      query.folderId = { $in: [null, undefined] };
+    } else {
+      query.folderId = folderId;
+    }
+
+    const reports = await StaffReport.find(query).sort({ createdAt: -1 }).limit(100);
     res.json({ success: true, reports });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+staffReportsRouter.get('/folders', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { parentId } = req.query;
+    const query: any = {};
+    
+    if (parentId === 'root' || !parentId) {
+      query.parentId = null;
+    } else {
+      query.parentId = parentId;
+    }
+
+    const folders = await StaffFolder.find(query).sort({ name: 1 });
+    res.json({ success: true, folders });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+staffReportsRouter.post('/folders', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { name, parentId, staffName } = req.body;
+    if (!name) return res.status(400).json({ success: false, message: 'Folder name is required' });
+
+    const folder = await StaffFolder.create({
+      name,
+      parentId: (parentId === 'root' || !parentId) ? null : parentId,
+      staffName: staffName || 'Staff'
+    });
+
+    res.status(201).json({ success: true, folder });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+staffReportsRouter.patch('/move', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { reportIds, folderIds, targetFolderId } = req.body;
+    const actualTarget = (targetFolderId === 'root' || !targetFolderId) ? null : targetFolderId;
+
+    if (reportIds && Array.isArray(reportIds)) {
+      await StaffReport.updateMany({ _id: { $in: reportIds } }, { $set: { folderId: actualTarget } });
+    }
+
+    if (folderIds && Array.isArray(folderIds)) {
+      // Prevent moving a folder into itself
+      const moveFolders = folderIds.filter(id => id !== targetFolderId);
+      await StaffFolder.updateMany({ _id: { $in: moveFolders } }, { $set: { parentId: actualTarget } });
+    }
+
+    res.json({ success: true, message: 'Items moved successfully' });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+staffReportsRouter.post('/copy', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { reportIds, targetFolderId } = req.body;
+    const actualTarget = (targetFolderId === 'root' || !targetFolderId) ? null : targetFolderId;
+
+    if (!reportIds || !Array.isArray(reportIds)) {
+      return res.status(400).json({ success: false, message: 'Invalid report IDs' });
+    }
+
+    const sourceReports = await StaffReport.find({ _id: { $in: reportIds } });
+    
+    const copies = sourceReports.map(r => {
+      const obj = r.toObject();
+      delete obj._id;
+      delete obj.createdAt;
+      delete obj.updatedAt;
+      return {
+        ...obj,
+        folderId: actualTarget,
+        note: `Copy of ${r._id}`
+      };
+    });
+
+    await StaffReport.insertMany(copies);
+
+    res.json({ success: true, message: 'Reports copied successfully' });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
@@ -815,7 +905,8 @@ staffReportsRouter.post('/', adminProtect, upload.single('image'), async (req: a
       imageUrl: result.url,
       fileId: result.fileId,
       staffName: req.body.staffName || 'Staff',
-      productCode: req.body.productCode
+      productCode: req.body.productCode,
+      folderId: (req.body.folderId === 'root' || !req.body.folderId) ? null : req.body.folderId
     });
 
     res.status(201).json({ success: true, report });

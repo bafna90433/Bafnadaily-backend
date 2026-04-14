@@ -5,6 +5,7 @@ export interface IStaffReport extends Document {
   fileId?: string;
   staffName?: string;
   productCode?: string;
+  folderId?: mongoose.Types.ObjectId | null;
   createdAt: Date;
 }
 
@@ -14,6 +15,7 @@ const staffReportSchema = new Schema<IStaffReport>(
     fileId: String,
     staffName: { type: String, default: 'Staff' },
     productCode: String,
+    folderId: { type: Schema.Types.ObjectId, ref: 'StaffFolder', default: null, index: true },
   },
   { timestamps: true }
 );
