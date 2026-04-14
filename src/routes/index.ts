@@ -189,12 +189,92 @@ productsRouter.put('/update-stock/barcode', adminProtect, async (req: Request, r
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+productsRouter.put('/update-stock/manual', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { productId, quantity = 1, type = 'inward' } = req.body;
+    if (!productId) return res.status(400).json({ success: false, message: 'Product ID is required' });
+
+    const qty = Number(quantity);
+    if (isNaN(qty) || qty <= 0) return res.status(400).json({ success: false, message: 'Invalid quantity' });
+
+    const product = await Product.findById(productId);
+    if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
+
+    const oldStock = product.stock;
+    if (type === 'outward') {
+      if (product.stock < qty) {
+        return res.status(400).json({ success: false, message: `Insufficient stock! Current: ${product.stock}, Trying to remove: ${qty}` });
+      }
+      product.stock -= qty;
+    } else {
+      product.stock += qty;
+    }
+
+    await product.save();
+
+    await InventoryLog.create({
+      productId: product._id,
+      type,
+      quantity: qty,
+      oldStock,
+      newStock: product.stock,
+      note: `Manual Stock ${type} update`
+    });
+
+    res.json({ success: true, message: `Stock ${type === 'inward' ? 'added' : 'removed'} successfully`, product });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 productsRouter.get('/inventory/logs/:productId', adminProtect, async (req: Request, res: Response) => {
   try {
     const logs = await InventoryLog.find({ productId: req.params.productId })
       .sort({ createdAt: -1 })
       .limit(50);
     res.json({ success: true, logs });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+productsRouter.get('/inventory/logs-today', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { type } = req.query; // 'inward' or 'outward'
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const query: any = { createdAt: { $gte: startOfDay, $lte: endOfDay } };
+    if (type) query.type = type;
+
+    const logs = await InventoryLog.find(query)
+      .populate('productId', 'name barcode images sku')
+      .sort({ createdAt: -1 });
+
+    res.json({ success: true, logs });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+productsRouter.get('/inventory/stats/today', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const logs = await InventoryLog.find({
+      createdAt: { $gte: startOfDay, $lte: endOfDay }
+    });
+
+    let inward = 0;
+    let outward = 0;
+
+    logs.forEach(log => {
+      if (log.type === 'inward') inward += log.quantity;
+      if (log.type === 'outward') outward += log.quantity;
+    });
+
+    res.json({ success: true, inward, outward });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
