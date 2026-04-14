@@ -400,6 +400,25 @@ ordersRouter.get('/my', protect, async (req: AuthRequest, res: Response) => {
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+ordersRouter.get('/pending-reviews', protect, async (req: AuthRequest, res: Response) => {
+  try {
+    const orders = await Order.find({ user: req.user._id, orderStatus: 'delivered' }).select('items');
+    const productMap: Record<string, { name: string; image: string }> = {};
+    for (const order of orders) {
+      for (const item of (order.items as any[])) {
+        const pid = item.product?.toString() || item.productId?.toString();
+        if (pid && !productMap[pid]) productMap[pid] = { name: item.name, image: item.image || '' };
+      }
+    }
+    const ids = Object.keys(productMap);
+    if (!ids.length) return res.json({ success: true, pendingReviews: [] });
+    const reviewed = await Product.find({ _id: { $in: ids }, 'reviews.user': req.user._id }).select('_id');
+    const reviewedSet = new Set(reviewed.map((p: any) => p._id.toString()));
+    const pending = ids.filter(id => !reviewedSet.has(id)).map(id => ({ productId: id, ...productMap[id] }));
+    res.json({ success: true, pendingReviews: pending });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 ordersRouter.get('/:id', protect, async (req: AuthRequest, res: Response) => {
   try {
     const order = await Order.findById(req.params.id);

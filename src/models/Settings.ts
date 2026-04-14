@@ -137,7 +137,7 @@ const siteSettingsSchema = new Schema<ISiteSettings>(
     maintenanceMode: { type: Boolean, default: false },
     maintenanceMessage: { type: String, default: 'We are upgrading our store. Back soon!' },
     hapticFeedback: { type: Boolean, default: true },
-    homeLayout: { type: Number, default: 1, enum: [1, 2, 3] },
+    homeLayout: { type: Number, default: 1, enum: [1, 2, 3, 4] },
   },
   { timestamps: true }
 );
