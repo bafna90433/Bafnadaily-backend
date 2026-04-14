@@ -5,6 +5,7 @@ export interface IStaffFolder extends Document {
   parentId: mongoose.Types.ObjectId | null;
   staffName?: string;
   createdAt: Date;
+  updatedAt: Date;
 }
 
 const staffFolderSchema = new Schema<IStaffFolder>(
