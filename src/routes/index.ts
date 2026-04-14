@@ -200,7 +200,13 @@ productsRouter.get('/inventory/logs/:productId', adminProtect, async (req: Reque
 
 productsRouter.put('/:id', adminProtect, async (req: Request, res: Response) => {
   try {
-    const product = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    // Use $set so arrays (colors, images, variants) are properly replaced
+    const product = await Product.findByIdAndUpdate(
+      req.params.id,
+      { $set: req.body },
+      { new: true, runValidators: false }
+    );
+    if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
     res.json({ success: true, product });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });

@@ -36,7 +36,7 @@ export interface IProduct extends Document {
   slug: string;
   description: string;
   shortDescription?: string;
-  images: { url: string; fileId?: string }[];
+  images: { url: string; fileId?: string; colorName?: string }[];
   category: mongoose.Types.ObjectId;
   subCategory?: mongoose.Types.ObjectId;
   tags: string[];
@@ -56,7 +56,7 @@ export interface IProduct extends Document {
   isBestSeller: boolean;
   giftWrapping: boolean;
   material?: string;
-  color: string[];
+  colors: { name: string; hex: string }[];
   weight?: number;
   sold: number;
   barcode?: string;
@@ -70,7 +70,7 @@ const productSchema = new Schema<IProduct>(
     slug: { type: String, required: true, unique: true, lowercase: true },
     description: { type: String, required: true },
     shortDescription: String,
-    images: [{ url: String, fileId: String }],
+    images: [{ url: String, fileId: String, colorName: String }],
     category: { type: Schema.Types.ObjectId, ref: 'Category', required: true },
     subCategory: { type: Schema.Types.ObjectId, ref: 'Category' },
     tags: [String],
@@ -90,7 +90,7 @@ const productSchema = new Schema<IProduct>(
     isBestSeller: { type: Boolean, default: false },
     giftWrapping: { type: Boolean, default: false },
     material: String,
-    color: [String],
+    colors: [{ name: String, hex: String }],
     weight: Number,
     sold: { type: Number, default: 0 },
     barcode: { type: String, unique: true, sparse: true },
