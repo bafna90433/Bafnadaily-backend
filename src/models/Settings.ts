@@ -70,6 +70,7 @@ export interface ISiteSettings extends Document {
   maintenanceMode: boolean;
   maintenanceMessage: string;
   hapticFeedback: boolean;
+  homeLayout: number;
 }
 
 const siteSettingsSchema = new Schema<ISiteSettings>(
@@ -136,6 +137,7 @@ const siteSettingsSchema = new Schema<ISiteSettings>(
     maintenanceMode: { type: Boolean, default: false },
     maintenanceMessage: { type: String, default: 'We are upgrading our store. Back soon!' },
     hapticFeedback: { type: Boolean, default: true },
+    homeLayout: { type: Number, default: 1, enum: [1, 2, 3] },
   },
   { timestamps: true }
 );

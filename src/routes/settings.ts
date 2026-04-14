@@ -49,6 +49,7 @@ router.get('/public', async (req: Request, res: Response) => {
         razorpayKeyId: s.razorpay?.enabled ? s.razorpay.keyId : '',
         shiprocketEnabled: s.shiprocket?.enabled,
         hapticFeedback: s.hapticFeedback !== false,
+        homeLayout: s.homeLayout || 1,
       },
     });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
