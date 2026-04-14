@@ -813,9 +813,16 @@ staffReportsRouter.get('/', adminProtect, async (req: Request, res: Response) =>
 
 staffReportsRouter.get('/folders', adminProtect, async (req: Request, res: Response) => {
   try {
-    const { parentId } = req.query;
-    const query: any = {};
+    const { parentId, all } = req.query;
+    let query: any = {};
     
+    if (all === 'true') {
+      // Return all folders for picker
+      const folders = await StaffFolder.find().sort({ name: 1 }).lean();
+      res.json({ success: true, folders });
+      return;
+    }
+
     if (parentId === 'root' || !parentId) {
       query.parentId = null;
     } else {
