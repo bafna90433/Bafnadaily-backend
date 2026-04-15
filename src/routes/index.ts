@@ -337,6 +337,25 @@ categoriesRouter.post('/', adminProtect, async (req: Request, res: Response) => 
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+// Category image upload
+categoriesRouter.post('/:id/upload-image', adminProtect, upload.single('image'), async (req: any, res: Response) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, message: 'No image uploaded' });
+    const result = await getImageKit().upload({
+      file: req.file.buffer,
+      fileName: `cat_${Date.now()}_${req.file.originalname}`,
+      folder: `/reteiler/categories`,
+    });
+    const category = await Category.findByIdAndUpdate(
+      req.params.id,
+      { image: result.url, imageFileId: result.fileId },
+      { new: true }
+    );
+    if (!category) return res.status(404).json({ success: false, message: 'Category not found' });
+    res.json({ success: true, url: result.url, fileId: result.fileId, category });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 categoriesRouter.put('/:id', adminProtect, async (req: Request, res: Response) => {
   try {
     const category = await Category.findByIdAndUpdate(req.params.id, req.body, { new: true });
