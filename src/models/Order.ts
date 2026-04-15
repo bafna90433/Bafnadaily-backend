@@ -90,7 +90,7 @@ export const Wishlist = mongoose.model('Wishlist', wishlistSchema);
 
 // ─── Banner ───────────────────────────────────────────────────────────────────
 const bannerSchema = new Schema(
-  { title: String, subtitle: String, image: String, link: String, isActive: { type: Boolean, default: true }, sortOrder: { type: Number, default: 0 }, type: { type: String, enum: ['hero','promo','category'], default: 'hero' } },
+  { title: String, subtitle: String, image: String, link: String, isActive: { type: Boolean, default: true }, sortOrder: { type: Number, default: 0 }, type: { type: String, enum: ['hero','promo','category','hanging'], default: 'hero' } },
   { timestamps: true }
 );
 export const Banner = mongoose.model('Banner', bannerSchema);
