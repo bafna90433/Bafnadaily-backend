@@ -71,6 +71,8 @@ export interface ISiteSettings extends Document {
   maintenanceMessage: string;
   hapticFeedback: boolean;
   homeLayout: number;
+  websiteLayout: number;
+  mobileLayout: number;
 }
 
 const siteSettingsSchema = new Schema<ISiteSettings>(
@@ -138,6 +140,8 @@ const siteSettingsSchema = new Schema<ISiteSettings>(
     maintenanceMessage: { type: String, default: 'We are upgrading our store. Back soon!' },
     hapticFeedback: { type: Boolean, default: true },
     homeLayout: { type: Number, default: 4, enum: [1, 2, 3, 4] },
+    websiteLayout: { type: Number, default: 4, enum: [1, 2, 3, 4] },
+    mobileLayout: { type: Number, default: 1, enum: [1, 2, 3] },
   },
   { timestamps: true }
 );
