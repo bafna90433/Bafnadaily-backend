@@ -15,7 +15,13 @@ const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
 router.get('/public', async (req: Request, res: Response) => {
   try {
     let s = await SiteSettings.findOne();
-    if (!s) s = await SiteSettings.create({});
+    if (!s) {
+      s = await SiteSettings.create({ homeLayout: 4 });
+    } else if (!s.homeLayout || s.homeLayout === 1) {
+      // One-time migration: switch old default layout-1 to the new boutique layout-4
+      s.homeLayout = 4;
+      await s.save();
+    }
     res.json({
       success: true,
       settings: {
@@ -49,7 +55,7 @@ router.get('/public', async (req: Request, res: Response) => {
         razorpayKeyId: s.razorpay?.enabled ? s.razorpay.keyId : '',
         shiprocketEnabled: s.shiprocket?.enabled,
         hapticFeedback: s.hapticFeedback !== false,
-        homeLayout: s.homeLayout || 1,
+        homeLayout: s.homeLayout || 4,
       },
     });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
