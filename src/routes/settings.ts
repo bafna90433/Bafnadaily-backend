@@ -16,11 +16,22 @@ router.get('/public', async (req: Request, res: Response) => {
   try {
     let s = await SiteSettings.findOne();
     if (!s) {
-      s = await SiteSettings.create({ homeLayout: 4 });
-    } else if (!s.homeLayout || s.homeLayout === 1) {
-      // One-time migration: switch old default layout-1 to the new boutique layout-4
-      s.homeLayout = 4;
-      await s.save();
+      s = await SiteSettings.create({ homeLayout: 4, websiteLayout: 4, mobileLayout: 1 });
+    } else {
+      let needsSave = false;
+      if (!s.homeLayout || s.homeLayout === 1) {
+        s.homeLayout = 4;
+        needsSave = true;
+      }
+      if (s.websiteLayout === undefined) {
+        s.websiteLayout = s.homeLayout || 4;
+        needsSave = true;
+      }
+      if (s.mobileLayout === undefined) {
+        s.mobileLayout = 1;
+        needsSave = true;
+      }
+      if (needsSave) await s.save();
     }
     res.json({
       success: true,
@@ -56,6 +67,8 @@ router.get('/public', async (req: Request, res: Response) => {
         shiprocketEnabled: s.shiprocket?.enabled,
         hapticFeedback: s.hapticFeedback !== false,
         homeLayout: s.homeLayout || 4,
+        websiteLayout: s.websiteLayout || s.homeLayout || 4,
+        mobileLayout: s.mobileLayout || 1,
       },
     });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
@@ -65,7 +78,24 @@ router.get('/public', async (req: Request, res: Response) => {
 router.get('/', adminProtect, async (req: Request, res: Response) => {
   try {
     let s = await SiteSettings.findOne();
-    if (!s) s = await SiteSettings.create({});
+    if (!s) {
+      s = await SiteSettings.create({ homeLayout: 4, websiteLayout: 4, mobileLayout: 1 });
+    } else {
+      let needsSave = false;
+      if (!s.homeLayout || s.homeLayout === 1) {
+        s.homeLayout = 4;
+        needsSave = true;
+      }
+      if (s.websiteLayout === undefined) {
+        s.websiteLayout = s.homeLayout || 4;
+        needsSave = true;
+      }
+      if (s.mobileLayout === undefined) {
+        s.mobileLayout = 1;
+        needsSave = true;
+      }
+      if (needsSave) await s.save();
+    }
     res.json({ success: true, settings: s });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
