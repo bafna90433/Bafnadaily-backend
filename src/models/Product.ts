@@ -8,9 +8,12 @@ export interface ICategory extends Document {
   image?: string;
   icon?: string;
   parent?: mongoose.Types.ObjectId;
+  layoutType?: 'standard' | 'hanging';
   isActive: boolean;
   sortOrder: number;
   featured: boolean;
+  banner?: string;
+  isDashboardMain: boolean;
 }
 
 const categorySchema = new Schema<ICategory>(
@@ -21,9 +24,12 @@ const categorySchema = new Schema<ICategory>(
     image: String,
     icon: String,
     parent: { type: Schema.Types.ObjectId, ref: 'Category', default: null },
+    layoutType: { type: String, enum: ['standard', 'hanging'], default: 'standard' },
     isActive: { type: Boolean, default: true },
     sortOrder: { type: Number, default: 0 },
     featured: { type: Boolean, default: false },
+    banner: String,
+    isDashboardMain: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

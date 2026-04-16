@@ -356,6 +356,20 @@ categoriesRouter.post('/:id/upload-image', adminProtect, upload.single('image'),
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+categoriesRouter.post('/:id/upload-banner', adminProtect, upload.single('banner'), async (req: Request, res: Response) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+    const result = await uploadToCloudinary(req.file.buffer, 'categories');
+    const category = await Category.findByIdAndUpdate(
+      req.params.id,
+      { banner: result.url },
+      { new: true }
+    );
+    if (!category) return res.status(404).json({ success: false, message: 'Category not found' });
+    res.json({ success: true, url: result.url, category });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 categoriesRouter.put('/:id', adminProtect, async (req: Request, res: Response) => {
   try {
     const category = await Category.findByIdAndUpdate(req.params.id, req.body, { new: true });
