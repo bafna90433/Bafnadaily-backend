@@ -28,7 +28,7 @@ productsRouter.get('/', async (req: Request, res: Response) => {
   try {
     const { category, search, minPrice, maxPrice, sort, page = 1, limit = 20, featured, trending, newArrival, bestSeller, tag } = req.query as any;
     const query: any = { isActive: true };
-    
+
     if (category) {
       if (mongoose.Types.ObjectId.isValid(category)) {
         // Include products from subcategories
@@ -311,8 +311,8 @@ export const categoriesRouter = express.Router();
 categoriesRouter.get('/', async (req: Request, res: Response) => {
   try {
     const { featured } = req.query as any;
-    const query: any = { 
-      isActive: true, 
+    const query: any = {
+      isActive: true,
       $or: [
         { parent: null },
         { isDashboardMain: true }
@@ -771,10 +771,17 @@ export const bannersRouter = express.Router();
 
 bannersRouter.get('/', async (req: Request, res: Response) => {
   try {
-    const { type } = req.query as any;
+    const { type, category } = req.query as any;
     const query: any = { isActive: true };
     if (type) query.type = type;
-    const banners = await Banner.find(query).sort({ sortOrder: 1 });
+    
+    if (category) {
+      query.category = category;
+    } else {
+      query.category = null;
+    }
+
+    const banners = await Banner.find(query).sort({ sortOrder: 1, createdAt: -1 });
     res.json({ success: true, banners });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -847,7 +854,7 @@ staffReportsRouter.get('/', adminProtect, async (req: Request, res: Response) =>
   try {
     const { folderId } = req.query;
     const query: any = {};
-    
+
     if (folderId === 'root' || !folderId) {
       query.folderId = { $in: [null, undefined] };
     } else {
@@ -863,7 +870,7 @@ staffReportsRouter.get('/folders', adminProtect, async (req: Request, res: Respo
   try {
     const { parentId, all } = req.query;
     let query: any = {};
-    
+
     if (all === 'true') {
       // Return all folders for picker
       const folders = await StaffFolder.find().sort({ name: 1 }).lean();
@@ -926,7 +933,7 @@ staffReportsRouter.post('/copy', adminProtect, async (req: Request, res: Respons
     }
 
     const sourceReports = await StaffReport.find({ _id: { $in: reportIds } });
-    
+
     const copies = sourceReports.map(r => {
       const obj = r.toObject();
       delete obj._id;
@@ -948,7 +955,7 @@ staffReportsRouter.post('/copy', adminProtect, async (req: Request, res: Respons
 staffReportsRouter.post('/', adminProtect, upload.single('image'), async (req: any, res: Response) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'No image' });
-    
+
     // Upload to ImageKit
     const result = await getImageKit().upload({
       file: req.file.buffer,

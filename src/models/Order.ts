@@ -99,7 +99,8 @@ const bannerSchema = new Schema(
     showOnMobile: { type: Boolean, default: true },
     showOnWebsite: { type: Boolean, default: true },
     sortOrder: { type: Number, default: 0 }, 
-    type: { type: String, enum: ['hero','promo','category','hanging'], default: 'hero' } 
+    type: { type: String, enum: ['hero','promo','category','hanging'], default: 'hero' },
+    category: { type: Schema.Types.ObjectId, ref: 'Category', default: null }
   },
   { timestamps: true }
 );
