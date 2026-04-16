@@ -306,7 +306,13 @@ export const categoriesRouter = express.Router();
 categoriesRouter.get('/', async (req: Request, res: Response) => {
   try {
     const { featured } = req.query as any;
-    const query: any = { isActive: true, parent: null };
+    const query: any = { 
+      isActive: true, 
+      $or: [
+        { parent: null },
+        { isDashboardMain: true }
+      ]
+    };
     if (featured === 'true') query.featured = true;
     const categories = await Category.find(query).sort({ sortOrder: 1 });
     res.json({ success: true, categories });
