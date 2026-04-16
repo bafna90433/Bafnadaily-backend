@@ -31,14 +31,19 @@ productsRouter.get('/', async (req: Request, res: Response) => {
     
     if (category) {
       if (mongoose.Types.ObjectId.isValid(category)) {
-        query.category = category;
+        // Include products from subcategories
+        const subcategories = await Category.find({ parent: category, isActive: true }).select('_id');
+        const categoryIds = [category, ...subcategories.map(c => c._id)];
+        query.category = { $in: categoryIds };
       } else {
         // Find category by name if it's not a valid ObjectId
         const foundCat = await Category.findOne({ name: new RegExp(`^${category}$`, 'i'), isActive: true });
         if (foundCat) {
-          query.category = foundCat._id;
+          const subcategories = await Category.find({ parent: foundCat._id, isActive: true }).select('_id');
+          const categoryIds = [foundCat._id, ...subcategories.map(c => c._id)];
+          query.category = { $in: categoryIds };
         } else {
-          // If category name not found, return empty results early or search for non-existent ID
+          // If category name not found, return empty results early
           return res.json({ success: true, products: [], total: 0, page: Number(page), pages: 0 });
         }
       }
