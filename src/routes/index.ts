@@ -31,16 +31,25 @@ productsRouter.get('/', async (req: Request, res: Response) => {
     const query: any = admin === 'true' ? {} : { isActive: { $ne: false } };
 
     if (categoryIdsParam) {
-      // Accept comma-separated list of category IDs directly from frontend
-      const ids = String(categoryIdsParam).split(',').filter(id => mongoose.Types.ObjectId.isValid(id.trim())).map(id => new mongoose.Types.ObjectId(id.trim()));
+      // Multiple IDs from frontend (parent + all subs already resolved)
+      const ids = String(categoryIdsParam).split(',')
+        .map(id => id.trim())
+        .filter(id => mongoose.Types.ObjectId.isValid(id))
+        .map(id => new mongoose.Types.ObjectId(id));
       if (ids.length > 0) query.category = { $in: ids };
     } else if (category) {
+      // Single category — also include direct subcategories (1 level deep)
       if (mongoose.Types.ObjectId.isValid(category)) {
-        query.category = new mongoose.Types.ObjectId(category);
+        const rootId = new mongoose.Types.ObjectId(category);
+        const subs = await Category.find({ parent: rootId }).select('_id');
+        const allIds = [rootId, ...subs.map(c => c._id)];
+        query.category = { $in: allIds };
       } else {
         const foundCat = await Category.findOne({ name: new RegExp(`^${category}$`, 'i') });
         if (foundCat) {
-          query.category = foundCat._id;
+          const subs = await Category.find({ parent: foundCat._id }).select('_id');
+          const allIds = [foundCat._id, ...subs.map(c => c._id)];
+          query.category = { $in: allIds };
         } else {
           return res.json({ success: true, products: [], total: 0, page: Number(page), pages: 0 });
         }
@@ -795,7 +804,8 @@ bannersRouter.get('/', async (req: Request, res: Response) => {
     // If `all=true`, return every banner (admin view — no category filter)
     if (all !== 'true') {
       if (category) {
-        query.category = category;          // banners for this specific category
+        // Return banners for this category OR global banners
+        query.category = { $in: [category, null] };
       } else {
         query.category = null;              // global banners (homepage)
       }
