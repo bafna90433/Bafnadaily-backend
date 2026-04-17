@@ -73,6 +73,12 @@ export interface ISiteSettings extends Document {
   homeLayout: number;
   websiteLayout: number;
   mobileLayout: number;
+
+  // Analytics / Tracking
+  metaPixelId: string;
+  metaPixelEnabled: boolean;
+  googleAnalyticsId: string;
+  googleAnalyticsEnabled: boolean;
 }
 
 const siteSettingsSchema = new Schema<ISiteSettings>(
@@ -142,6 +148,11 @@ const siteSettingsSchema = new Schema<ISiteSettings>(
     homeLayout: { type: Number, default: 4, enum: [1, 2, 3, 4] },
     websiteLayout: { type: Number, default: 4, enum: [1, 2, 3, 4] },
     mobileLayout: { type: Number, default: 1, enum: [1, 2, 3] },
+
+    metaPixelId: { type: String, default: '' },
+    metaPixelEnabled: { type: Boolean, default: false },
+    googleAnalyticsId: { type: String, default: '' },
+    googleAnalyticsEnabled: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

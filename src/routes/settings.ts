@@ -69,6 +69,10 @@ router.get('/public', async (req: Request, res: Response) => {
         homeLayout: s.homeLayout || 4,
         websiteLayout: s.websiteLayout || s.homeLayout || 4,
         mobileLayout: s.mobileLayout || 1,
+        metaPixelId: s.metaPixelEnabled ? (s.metaPixelId || '') : '',
+        metaPixelEnabled: s.metaPixelEnabled || false,
+        googleAnalyticsId: s.googleAnalyticsEnabled ? (s.googleAnalyticsId || '') : '',
+        googleAnalyticsEnabled: s.googleAnalyticsEnabled || false,
       },
     });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
