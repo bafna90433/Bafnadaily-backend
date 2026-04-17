@@ -31,17 +31,27 @@ productsRouter.get('/', async (req: Request, res: Response) => {
     const query: any = admin === 'true' ? {} : { isActive: true };
 
     if (category) {
+      // Helper: collect all descendant category IDs (2 levels deep)
+      const getAllCategoryIds = async (rootId: any): Promise<any[]> => {
+        const rootObjectId = new mongoose.Types.ObjectId(rootId);
+        const level1 = await Category.find({ parent: rootObjectId }).select('_id');
+        const l1Ids = level1.map(c => c._id);
+        let l2Ids: any[] = [];
+        if (l1Ids.length > 0) {
+          const level2 = await Category.find({ parent: { $in: l1Ids } }).select('_id');
+          l2Ids = level2.map(c => c._id);
+        }
+        return [rootObjectId, ...l1Ids, ...l2Ids];
+      };
+
       if (mongoose.Types.ObjectId.isValid(category)) {
-        // Include products from subcategories
-        const subcategories = await Category.find({ parent: category, isActive: true }).select('_id');
-        const categoryIds = [category, ...subcategories.map(c => c._id)];
+        const categoryIds = await getAllCategoryIds(category);
         query.category = { $in: categoryIds };
       } else {
         // Find category by name if it's not a valid ObjectId
         const foundCat = await Category.findOne({ name: new RegExp(`^${category}$`, 'i'), isActive: true });
         if (foundCat) {
-          const subcategories = await Category.find({ parent: foundCat._id, isActive: true }).select('_id');
-          const categoryIds = [foundCat._id, ...subcategories.map(c => c._id)];
+          const categoryIds = await getAllCategoryIds(foundCat._id);
           query.category = { $in: categoryIds };
         } else {
           // If category name not found, return empty results early
