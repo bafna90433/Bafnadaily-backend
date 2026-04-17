@@ -27,8 +27,8 @@ export const productsRouter = express.Router();
 
 productsRouter.get('/', async (req: Request, res: Response) => {
   try {
-    const { category, search, minPrice, maxPrice, sort, page = 1, limit = 20, featured, trending, newArrival, bestSeller, tag } = req.query as any;
-    const query: any = { isActive: true };
+    const { category, search, minPrice, maxPrice, sort, page = 1, limit = 20, featured, trending, newArrival, bestSeller, tag, admin } = req.query as any;
+    const query: any = admin === 'true' ? {} : { isActive: true };
 
     if (category) {
       if (mongoose.Types.ObjectId.isValid(category)) {
@@ -55,17 +55,36 @@ productsRouter.get('/', async (req: Request, res: Response) => {
     if (bestSeller === 'true') query.isBestSeller = true;
     if (tag) query.tags = { $in: [tag] };
     if (search) {
-      if (search.match(/^[a-zA-Z0-9]+$/)) {
-        // If search looks like a barcode or SKU, prioritize exact match
-        query.$or = [
-          { barcode: search },
-          { sku: search },
-          { name: { $regex: search, $options: 'i' } }
-        ];
-      } else {
-        // Otherwise use traditional name search
-        query.name = { $regex: search, $options: 'i' };
+      // Find categories whose name matches the search term
+      const matchingCats = await Category.find({
+        name: { $regex: search, $options: 'i' },
+        isActive: true,
+      }).select('_id');
+
+      // Also include subcategories of matched categories
+      let catIds = matchingCats.map(c => c._id);
+      if (catIds.length > 0) {
+        const subCats = await Category.find({ parent: { $in: catIds }, isActive: true }).select('_id');
+        catIds = [...catIds, ...subCats.map(c => c._id)];
       }
+
+      const searchOr: any[] = [
+        { name: { $regex: search, $options: 'i' } },
+        { sku: { $regex: search, $options: 'i' } },
+        { tags: { $in: [new RegExp(search, 'i')] } },
+      ];
+
+      // Exact barcode match
+      if (search.match(/^[a-zA-Z0-9]+$/)) {
+        searchOr.push({ barcode: search });
+      }
+
+      // Category name match
+      if (catIds.length > 0) {
+        searchOr.push({ category: { $in: catIds } });
+      }
+
+      query.$or = searchOr;
     }
     if (minPrice || maxPrice) {
       query.price = {};
