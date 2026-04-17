@@ -27,34 +27,21 @@ export const productsRouter = express.Router();
 
 productsRouter.get('/', async (req: Request, res: Response) => {
   try {
-    const { category, search, minPrice, maxPrice, sort, page = 1, limit = 20, featured, trending, newArrival, bestSeller, tag, admin } = req.query as any;
-    const query: any = admin === 'true' ? {} : { isActive: true };
+    const { category, categoryIds: categoryIdsParam, search, minPrice, maxPrice, sort, page = 1, limit = 20, featured, trending, newArrival, bestSeller, tag, admin } = req.query as any;
+    const query: any = admin === 'true' ? {} : { isActive: { $ne: false } };
 
-    if (category) {
-      // Helper: collect all descendant category IDs (2 levels deep)
-      const getAllCategoryIds = async (rootId: any): Promise<any[]> => {
-        const rootObjectId = new mongoose.Types.ObjectId(rootId);
-        const level1 = await Category.find({ parent: rootObjectId }).select('_id');
-        const l1Ids = level1.map(c => c._id);
-        let l2Ids: any[] = [];
-        if (l1Ids.length > 0) {
-          const level2 = await Category.find({ parent: { $in: l1Ids } }).select('_id');
-          l2Ids = level2.map(c => c._id);
-        }
-        return [rootObjectId, ...l1Ids, ...l2Ids];
-      };
-
+    if (categoryIdsParam) {
+      // Accept comma-separated list of category IDs directly from frontend
+      const ids = String(categoryIdsParam).split(',').filter(id => mongoose.Types.ObjectId.isValid(id.trim())).map(id => new mongoose.Types.ObjectId(id.trim()));
+      if (ids.length > 0) query.category = { $in: ids };
+    } else if (category) {
       if (mongoose.Types.ObjectId.isValid(category)) {
-        const categoryIds = await getAllCategoryIds(category);
-        query.category = { $in: categoryIds };
+        query.category = new mongoose.Types.ObjectId(category);
       } else {
-        // Find category by name if it's not a valid ObjectId
-        const foundCat = await Category.findOne({ name: new RegExp(`^${category}$`, 'i'), isActive: true });
+        const foundCat = await Category.findOne({ name: new RegExp(`^${category}$`, 'i') });
         if (foundCat) {
-          const categoryIds = await getAllCategoryIds(foundCat._id);
-          query.category = { $in: categoryIds };
+          query.category = foundCat._id;
         } else {
-          // If category name not found, return empty results early
           return res.json({ success: true, products: [], total: 0, page: Number(page), pages: 0 });
         }
       }
