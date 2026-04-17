@@ -10,6 +10,7 @@ import { Order, Cart, Wishlist, Banner, Coupon } from '../models/Order';
 import { User } from '../models/User';
 import { StaffReport } from '../models/StaffReport';
 import { StaffFolder } from '../models/StaffFolder';
+import { DealOfDay } from '../models/DealOfDay';
 import { StaffReport as StaffReportModel } from '../models/StaffReport'; // Just in case of conflicts
 import { protect } from '../middleware/auth';
 import { adminProtect } from '../middleware/auth';
@@ -904,6 +905,36 @@ staffReportsRouter.post('/folders', adminProtect, async (req: Request, res: Resp
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+staffReportsRouter.patch('/folders/:id', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { name } = req.body;
+    if (!name?.trim()) return res.status(400).json({ success: false, message: 'Name required' });
+    const folder = await StaffFolder.findByIdAndUpdate(req.params.id, { name: name.trim() }, { new: true });
+    if (!folder) return res.status(404).json({ success: false, message: 'Folder not found' });
+    res.json({ success: true, folder });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+staffReportsRouter.delete('/folders/:id', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const folderId = req.params.id;
+    // Delete all reports inside this folder (and their ImageKit files)
+    const reportsInFolder = await StaffReport.find({ folderId });
+    await Promise.allSettled(reportsInFolder.map(r => r.fileId ? getImageKit().deleteFile(r.fileId) : Promise.resolve()));
+    await StaffReport.deleteMany({ folderId });
+    // Delete sub-folders recursively (shallow — one level deep)
+    const subFolders = await StaffFolder.find({ parentId: folderId });
+    for (const sub of subFolders) {
+      const subReports = await StaffReport.find({ folderId: sub._id });
+      await Promise.allSettled(subReports.map(r => r.fileId ? getImageKit().deleteFile(r.fileId) : Promise.resolve()));
+      await StaffReport.deleteMany({ folderId: sub._id });
+      await StaffFolder.deleteOne({ _id: sub._id });
+    }
+    await StaffFolder.findByIdAndDelete(folderId);
+    res.json({ success: true, message: 'Folder deleted' });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 staffReportsRouter.patch('/move', adminProtect, async (req: Request, res: Response) => {
   try {
     const { reportIds, folderIds, targetFolderId } = req.body;
@@ -1025,6 +1056,91 @@ staffReportsRouter.delete('/:id', adminProtect, async (req: Request, res: Respon
 
     await report.deleteOne();
     res.json({ success: true, message: 'Report deleted successfully' });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DEALS OF THE DAY ROUTER
+// ══════════════════════════════════════════════════════════════════════════════
+export const dealsRouter = express.Router();
+
+// Public: get active deals (endTime in future, isActive true)
+dealsRouter.get('/', async (req: Request, res: Response) => {
+  try {
+    const deals = await DealOfDay.find({ isActive: true, endTime: { $gt: new Date() } })
+      .populate('product', 'name slug images price mrp discount')
+      .sort({ endTime: 1 });
+    res.json({ success: true, deals });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// Admin: get all deals (including expired)
+dealsRouter.get('/all', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const deals = await DealOfDay.find()
+      .populate('product', 'name slug images price mrp')
+      .sort({ createdAt: -1 });
+    res.json({ success: true, deals });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// Admin: create deal
+dealsRouter.post('/', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { productId, discountType, discountValue, endTime } = req.body;
+    if (!productId || !discountType || discountValue == null || !endTime)
+      return res.status(400).json({ success: false, message: 'Missing required fields' });
+
+    const product = await Product.findById(productId);
+    if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
+
+    let dealPrice: number;
+    if (discountType === 'percentage') {
+      dealPrice = Math.round(product.price * (1 - discountValue / 100));
+    } else {
+      dealPrice = Math.round(product.price - discountValue);
+    }
+    if (dealPrice < 0) dealPrice = 0;
+
+    const deal = await DealOfDay.create({ product: productId, discountType, discountValue, dealPrice, endTime, isActive: true });
+    const populated = await deal.populate('product', 'name slug images price mrp');
+    res.status(201).json({ success: true, deal: populated });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// Admin: update deal
+dealsRouter.put('/:id', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { discountType, discountValue, endTime, isActive } = req.body;
+    const deal = await DealOfDay.findById(req.params.id).populate('product');
+    if (!deal) return res.status(404).json({ success: false, message: 'Deal not found' });
+
+    if (discountType) deal.discountType = discountType;
+    if (discountValue != null) deal.discountValue = discountValue;
+    if (endTime) deal.endTime = endTime;
+    if (isActive != null) deal.isActive = isActive;
+
+    // Recalculate deal price
+    const prod = deal.product as any;
+    if (discountType || discountValue != null) {
+      const type = deal.discountType;
+      const val = deal.discountValue;
+      deal.dealPrice = type === 'percentage'
+        ? Math.round(prod.price * (1 - val / 100))
+        : Math.round(prod.price - val);
+      if (deal.dealPrice < 0) deal.dealPrice = 0;
+    }
+
+    await deal.save();
+    res.json({ success: true, deal });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// Admin: delete deal
+dealsRouter.delete('/:id', adminProtect, async (req: Request, res: Response) => {
+  try {
+    await DealOfDay.findByIdAndDelete(req.params.id);
+    res.json({ success: true, message: 'Deal deleted' });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
