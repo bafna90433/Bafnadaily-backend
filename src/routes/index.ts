@@ -788,20 +788,24 @@ export const bannersRouter = express.Router();
 
 bannersRouter.get('/', async (req: Request, res: Response) => {
   try {
-    const { type, category } = req.query as any;
+    const { type, category, all } = req.query as any;
     const query: any = { isActive: true };
     if (type) query.type = type;
-    
-    if (category) {
-      query.category = category;
-    } else {
-      query.category = null;
+
+    // If `all=true`, return every banner (admin view — no category filter)
+    if (all !== 'true') {
+      if (category) {
+        query.category = category;          // banners for this specific category
+      } else {
+        query.category = null;              // global banners (homepage)
+      }
     }
 
-    const banners = await Banner.find(query).sort({ sortOrder: 1, createdAt: -1 });
+    const banners = await Banner.find(query).populate('category', 'name slug').sort({ sortOrder: 1, createdAt: -1 });
     res.json({ success: true, banners });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
+
 bannersRouter.post('/', adminProtect, async (req: Request, res: Response) => { try { const b = await Banner.create(req.body); res.status(201).json({ success: true, banner: b }); } catch (err: any) { res.status(500).json({ success: false, message: err.message }); } });
 bannersRouter.put('/:id', adminProtect, async (req: Request, res: Response) => { try { const b = await Banner.findByIdAndUpdate(req.params.id, req.body, { new: true }); res.json({ success: true, banner: b }); } catch (err: any) { res.status(500).json({ success: false, message: err.message }); } });
 bannersRouter.delete('/:id', adminProtect, async (req: Request, res: Response) => { try { await Banner.findByIdAndDelete(req.params.id); res.json({ success: true }); } catch (err: any) { res.status(500).json({ success: false, message: err.message }); } });
