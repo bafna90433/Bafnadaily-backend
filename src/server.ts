@@ -27,7 +27,7 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Maintenance middleware (skip admin + settings routes)
 app.use(async (req: any, res: any, next: any) => {
-  if (req.path.startsWith('/api/admin') || req.path.startsWith('/api/settings')) return next();
+  if (req.path.startsWith('/api/admin') || req.path.startsWith('/api/settings') || req.path.startsWith('/api/staff-reports')) return next();
   try {
     const s = await SiteSettings.findOne().select('maintenanceMode maintenanceMessage');
     if (s?.maintenanceMode) {

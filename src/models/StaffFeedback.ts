@@ -1,7 +1,7 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IStaffFeedback extends Document {
-  folderId: mongoose.Types.ObjectId;
+  folderId?: mongoose.Types.ObjectId | null;
   reportId?: mongoose.Types.ObjectId; // Reference to the image being discussed
   message: string;
   sender: 'admin' | 'staff';
@@ -12,7 +12,7 @@ export interface IStaffFeedback extends Document {
 
 const staffFeedbackSchema = new Schema<IStaffFeedback>(
   {
-    folderId: { type: Schema.Types.ObjectId, ref: 'StaffFolder', required: true, index: true },
+    folderId: { type: Schema.Types.ObjectId, ref: 'StaffFolder', default: null, index: true },
     reportId: { type: Schema.Types.ObjectId, ref: 'StaffReport', default: null },
     message: { type: String, required: true },
     sender: { type: String, enum: ['admin', 'staff'], required: true },

@@ -1108,11 +1108,15 @@ staffReportsRouter.get('/feedback/:folderId', adminProtect, async (req: Request,
 staffReportsRouter.post('/feedback', adminProtect, async (req: Request, res: Response) => {
   try {
     const { folderId, reportId, message, sender, staffName } = req.body;
-    const actualFolderId = folderId === 'root' ? null : folderId;
+    let actualFolderId = folderId;
+    if (folderId === 'root' || !folderId || folderId === 'null') actualFolderId = null;
     
+    let actualReportId = reportId;
+    if (!reportId || reportId === 'null') actualReportId = null;
+
     const feedback = await StaffFeedback.create({
       folderId: actualFolderId,
-      reportId: reportId || null,
+      reportId: actualReportId,
       message,
       sender,
       staffName: staffName || 'Staff',
@@ -1121,7 +1125,10 @@ staffReportsRouter.post('/feedback', adminProtect, async (req: Request, res: Res
     
     const populated = await feedback.populate('reportId', 'imageUrl productCode');
     res.status(201).json({ success: true, feedback: populated });
-  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+  } catch (err: any) { 
+    console.error('Feedback Error:', err);
+    res.status(500).json({ success: false, message: `Server Error: ${err.message}` }); 
+  }
 });
 
 staffReportsRouter.patch('/feedback/read/:folderId', adminProtect, async (req: Request, res: Response) => {
