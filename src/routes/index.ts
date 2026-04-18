@@ -270,21 +270,37 @@ productsRouter.get('/inventory/logs/:productId', adminProtect, async (req: Reque
 
 productsRouter.get('/inventory/logs-today', adminProtect, async (req: Request, res: Response) => {
   try {
-    const { type } = req.query; // 'inward' or 'outward'
+    const { type } = req.query;
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
-
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
-
     const query: any = { createdAt: { $gte: startOfDay, $lte: endOfDay } };
     if (type) query.type = type;
-
     const logs = await InventoryLog.find(query)
       .populate('productId', 'name barcode images sku')
       .sort({ createdAt: -1 });
-
     res.json({ success: true, logs });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// All logs with optional type + date range filter
+productsRouter.get('/inventory/logs-all', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { type, from, to } = req.query;
+    const query: any = {};
+    if (type) query.type = type;
+    if (from || to) {
+      query.createdAt = {};
+      if (from) { const d = new Date(from as string); d.setHours(0, 0, 0, 0); query.createdAt.$gte = d; }
+      if (to)   { const d = new Date(to as string);   d.setHours(23, 59, 59, 999); query.createdAt.$lte = d; }
+    }
+    const logs = await InventoryLog.find(query)
+      .populate('productId', 'name barcode images sku')
+      .sort({ createdAt: -1 })
+      .limit(500);
+    const totalQty = logs.reduce((sum: number, l: any) => sum + l.quantity, 0);
+    res.json({ success: true, logs, total: logs.length, totalQty });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
