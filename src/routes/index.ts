@@ -1105,24 +1105,14 @@ staffReportsRouter.get('/feedback/:folderId', adminProtect, async (req: Request,
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
-staffReportsRouter.post('/feedback', adminProtect, upload.single('audio'), async (req: Request, res: Response) => {
+staffReportsRouter.post('/feedback', adminProtect, async (req: Request, res: Response) => {
   try {
-    const { folderId, reportId, message, sender, staffName, audioDuration } = req.body;
+    const { folderId, reportId, message, sender, staffName } = req.body;
     let actualFolderId = folderId;
     if (folderId === 'root' || !folderId || folderId === 'null') actualFolderId = null;
     
     let actualReportId = reportId;
     if (!reportId || reportId === 'null') actualReportId = null;
-
-    let audioUrl = null;
-    if (req.file) {
-      const uploadRes = await getImageKit().upload({
-        file: req.file.buffer,
-        fileName: `voice_${Date.now()}.m4a`,
-        folder: '/staff-feedback'
-      });
-      audioUrl = uploadRes.url;
-    }
 
     const feedback = await StaffFeedback.create({
       folderId: actualFolderId,
@@ -1130,16 +1120,13 @@ staffReportsRouter.post('/feedback', adminProtect, upload.single('audio'), async
       message: message || '',
       sender,
       staffName: staffName || 'Staff',
-      isRead: false,
-      audioUrl,
-      audioDuration: audioDuration ? Number(audioDuration) : 0
+      isRead: false
     });
     
     const populated = await feedback.populate('reportId', 'imageUrl productCode');
     res.status(201).json({ success: true, feedback: populated });
   } catch (err: any) { 
-    console.error('Feedback Error:', err);
-    res.status(500).json({ success: false, message: `Server Error: ${err.message}` }); 
+    res.status(500).json({ success: false, message: err.message }); 
   }
 });
 
