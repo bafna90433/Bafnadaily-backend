@@ -10,6 +10,7 @@ import { Order, Cart, Wishlist, Banner, Coupon } from '../models/Order';
 import { User } from '../models/User';
 import { StaffReport } from '../models/StaffReport';
 import { StaffFolder } from '../models/StaffFolder';
+import { StaffFeedback } from '../models/StaffFeedback';
 import { DealOfDay } from '../models/DealOfDay';
 import { StaffReport as StaffReportModel } from '../models/StaffReport'; // Just in case of conflicts
 import { protect } from '../middleware/auth';
@@ -1086,6 +1087,54 @@ staffReportsRouter.delete('/:id', adminProtect, async (req: Request, res: Respon
 
     await report.deleteOne();
     res.json({ success: true, message: 'Report deleted successfully' });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// ─── STAFF FEEDBACK / CHAT ───
+staffReportsRouter.get('/feedback/:folderId', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { folderId } = req.params;
+    const actualFolderId = folderId === 'root' ? null : folderId;
+    
+    // Fetch messages for this folder, populate report if reference exists
+    const messages = await StaffFeedback.find({ folderId: actualFolderId })
+      .populate('reportId', 'imageUrl productCode')
+      .sort({ createdAt: 1 });
+      
+    res.json({ success: true, messages });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+staffReportsRouter.post('/feedback', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { folderId, reportId, message, sender, staffName } = req.body;
+    const actualFolderId = folderId === 'root' ? null : folderId;
+    
+    const feedback = await StaffFeedback.create({
+      folderId: actualFolderId,
+      reportId: reportId || null,
+      message,
+      sender,
+      staffName: staffName || 'Staff',
+      isRead: false
+    });
+    
+    const populated = await feedback.populate('reportId', 'imageUrl productCode');
+    res.status(201).json({ success: true, feedback: populated });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+staffReportsRouter.patch('/feedback/read/:folderId', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { folderId } = req.params;
+    const actualFolderId = folderId === 'root' ? null : folderId;
+    
+    await StaffFeedback.updateMany(
+      { folderId: actualFolderId, isRead: false },
+      { $set: { isRead: true } }
+    );
+    
+    res.json({ success: true, message: 'Messages marked as read' });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 

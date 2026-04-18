@@ -1,0 +1,25 @@
+import mongoose, { Schema, Document } from 'mongoose';
+
+export interface IStaffFeedback extends Document {
+  folderId: mongoose.Types.ObjectId;
+  reportId?: mongoose.Types.ObjectId; // Reference to the image being discussed
+  message: string;
+  sender: 'admin' | 'staff';
+  staffName?: string;
+  isRead: boolean;
+  createdAt: Date;
+}
+
+const staffFeedbackSchema = new Schema<IStaffFeedback>(
+  {
+    folderId: { type: Schema.Types.ObjectId, ref: 'StaffFolder', required: true, index: true },
+    reportId: { type: Schema.Types.ObjectId, ref: 'StaffReport', default: null },
+    message: { type: String, required: true },
+    sender: { type: String, enum: ['admin', 'staff'], required: true },
+    staffName: { type: String, default: 'Staff' },
+    isRead: { type: Boolean, default: false },
+  },
+  { timestamps: { createdAt: true, updatedAt: false } }
+);
+
+export const StaffFeedback = mongoose.model<IStaffFeedback>('StaffFeedback', staffFeedbackSchema);
