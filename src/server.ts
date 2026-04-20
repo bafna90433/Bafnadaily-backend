@@ -38,6 +38,7 @@ app.use(async (req: any, res: any, next: any) => {
 });
 
 app.get('/', (_req: any, res: any) => res.json({ success: true, message: '🛍️ Reteiler API v2.0' }));
+app.get('/api', (_req: any, res: any) => res.json({ success: true, message: '🚀 Reteiler API Root (Connected)' }));
 
 app.use('/api/auth', authRouter);
 app.use('/api/admin/auth', adminAuthRouter);
