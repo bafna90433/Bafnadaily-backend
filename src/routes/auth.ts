@@ -49,13 +49,24 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
     const isNew = !user;
 
     if (!user) {
-      user = await User.create({ phone, name: name || `User_${phone.slice(-4)}` });
+      user = await User.create({ 
+        phone, 
+        name: name || `User_${phone.slice(-4)}`,
+        businessName: req.body.businessName,
+        gstNumber: req.body.gstNumber,
+        whatsapp: req.body.whatsapp || phone,
+        visitingCard: req.body.visitingCard
+      });
     } else {
       if (user.isBlocked) {
         return res.status(403).json({ success: false, message: 'Your account has been suspended. Contact support.' });
       }
       user.lastLogin = new Date();
       if (name && !user.name) user.name = name;
+      if (req.body.businessName && !user.businessName) user.businessName = req.body.businessName;
+      if (req.body.gstNumber && !user.gstNumber) user.gstNumber = req.body.gstNumber;
+      if (req.body.whatsapp && !user.whatsapp) user.whatsapp = req.body.whatsapp;
+      if (req.body.visitingCard && !user.visitingCard) user.visitingCard = req.body.visitingCard;
       await user.save();
     }
 
@@ -98,6 +109,10 @@ router.post('/google', async (req: Request, res: Response) => {
         name,
         googleId,
         avatar: picture,
+        businessName: req.body.businessName,
+        gstNumber: req.body.gstNumber,
+        whatsapp: req.body.whatsapp,
+        visitingCard: req.body.visitingCard,
         customerType: 'retail',
         isActive: true
       });
@@ -110,6 +125,10 @@ router.post('/google', async (req: Request, res: Response) => {
       if (!user.googleId) { user.googleId = googleId; updated = true; }
       if (!user.email) { user.email = email; updated = true; }
       if (!user.avatar) { user.avatar = picture; updated = true; }
+      if (req.body.businessName && !user.businessName) { user.businessName = req.body.businessName; updated = true; }
+      if (req.body.gstNumber && !user.gstNumber) { user.gstNumber = req.body.gstNumber; updated = true; }
+      if (req.body.whatsapp && !user.whatsapp) { user.whatsapp = req.body.whatsapp; updated = true; }
+      if (req.body.visitingCard && !user.visitingCard) { user.visitingCard = req.body.visitingCard; updated = true; }
       if (updated) await user.save();
     }
 

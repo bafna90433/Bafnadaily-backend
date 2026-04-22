@@ -19,6 +19,8 @@ export interface IUser extends Document {
   creditLimit: number;
   gstNumber?: string;
   businessName?: string;
+  whatsapp?: string;
+  visitingCard?: string;
   totalOrders: number;
   totalSpent: number;
   notes?: string;
@@ -57,6 +59,8 @@ const userSchema = new Schema<IUser>(
     creditLimit: { type: Number, default: 0 },
     gstNumber: String,
     businessName: String,
+    whatsapp: String,
+    visitingCard: String,
     totalOrders: { type: Number, default: 0 },
     totalSpent: { type: Number, default: 0 },
     notes: String,

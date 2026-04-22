@@ -791,6 +791,18 @@ uploadRouter.post('/image', adminProtect, upload.single('image'), async (req: an
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+uploadRouter.post('/visiting-card', upload.single('image'), async (req: any, res: Response) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file' });
+    const result = await getImageKit().upload({
+      file: req.file.buffer,
+      fileName: `vc_${Date.now()}_${req.file.originalname}`,
+      folder: '/reteiler/visiting-cards',
+    });
+    res.json({ success: true, url: result.url, fileId: result.fileId });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 uploadRouter.post('/images', adminProtect, upload.array('images', 10), async (req: any, res: Response) => {
   try {
     if (!req.files?.length) return res.status(400).json({ success: false, message: 'No files' });
