@@ -6,6 +6,7 @@ export interface IUser extends Document {
   name: string;
   phone: string;
   email?: string;
+  googleId?: string;
   avatar?: string;
   addresses: any[];
   isActive: boolean;
@@ -41,8 +42,9 @@ const addressSchema = new Schema({
 const userSchema = new Schema<IUser>(
   {
     name: { type: String, trim: true, default: '' },
-    phone: { type: String, required: true, unique: true },
-    email: { type: String, trim: true, lowercase: true },
+    phone: { type: String, sparse: true, unique: true },
+    email: { type: String, trim: true, lowercase: true, sparse: true, unique: true },
+    googleId: { type: String, sparse: true, unique: true },
     avatar: { type: String, default: '' },
     addresses: [addressSchema],
     isActive: { type: Boolean, default: true },

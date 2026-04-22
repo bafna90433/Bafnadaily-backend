@@ -894,6 +894,13 @@ adminRouter.get('/abandoned-carts', adminProtect, async (req: Request, res: Resp
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+adminRouter.delete('/abandoned-carts/:id', adminProtect, async (req: Request, res: Response) => {
+  try {
+    await Cart.findByIdAndDelete(req.params.id);
+    res.json({ success: true, message: 'Abandoned cart deleted' });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 adminRouter.get('/users', adminProtect, async (req: Request, res: Response) => {
   try {
     const { page = 1, limit = 20, search } = req.query as any;

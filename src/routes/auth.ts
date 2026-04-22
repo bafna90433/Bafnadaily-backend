@@ -3,8 +3,10 @@ import { User, OTP } from '../models/User';
 import { generateOTP, sendOTP } from '../utils/otp';
 import { protect } from '../middleware/auth';
 import { AuthRequest } from '../types';
+import { OAuth2Client } from 'google-auth-library';
 
 const router = express.Router();
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // POST /api/auth/send-otp
 router.post('/send-otp', async (req: Request, res: Response) => {
@@ -64,6 +66,66 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
         _id: user._id, name: user.name, phone: user.phone, email: user.email,
         avatar: user.avatar, customerType: user.customerType,
         isSpecialCustomer: user.isSpecialCustomer, codEnabled: user.codEnabled,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/auth/google
+router.post('/google', async (req: Request, res: Response) => {
+  try {
+    const { idToken } = req.body;
+    if (!idToken) return res.status(400).json({ success: false, message: 'ID Token required' });
+
+    const ticket = await googleClient.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    if (!payload) return res.status(400).json({ success: false, message: 'Invalid token' });
+
+    const { email, name, picture, sub: googleId } = payload;
+
+    // Find by googleId first, then by email
+    let user = await User.findOne({ $or: [{ googleId }, { email }] });
+
+    if (!user) {
+      user = await User.create({
+        email,
+        name,
+        googleId,
+        avatar: picture,
+        customerType: 'retail',
+        isActive: true
+      });
+    } else {
+      if (user.isBlocked) {
+        return res.status(403).json({ success: false, message: 'Your account has been suspended. Contact support.' });
+      }
+      // Update info if missing
+      let updated = false;
+      if (!user.googleId) { user.googleId = googleId; updated = true; }
+      if (!user.email) { user.email = email; updated = true; }
+      if (!user.avatar) { user.avatar = picture; updated = true; }
+      if (updated) await user.save();
+    }
+
+    const token = user.getSignedToken();
+    res.json({
+      success: true,
+      token,
+      user: {
+        _id: user._id,
+        name: user.name,
+        phone: user.phone,
+        email: user.email,
+        avatar: user.avatar,
+        customerType: user.customerType,
+        isSpecialCustomer: user.isSpecialCustomer,
+        codEnabled: user.codEnabled,
       },
     });
   } catch (err: any) {
