@@ -924,6 +924,13 @@ adminRouter.get('/users', adminProtect, async (req: Request, res: Response) => {
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+adminRouter.delete('/users/:id', adminProtect, async (req: Request, res: Response) => {
+  try {
+    await User.findByIdAndDelete(req.params.id);
+    res.json({ success: true, message: 'User deleted' });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 // ─── STAFF REPORTS ────────────────────────────────────────────────────────────
 export const staffReportsRouter = express.Router();
 
