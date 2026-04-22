@@ -161,12 +161,20 @@ router.get('/me', protect, async (req: AuthRequest, res: Response) => {
 // PUT /api/auth/me
 router.put('/me', protect, async (req: AuthRequest, res: Response) => {
   try {
-    const { name, email, avatar } = req.body;
-    const user = await User.findByIdAndUpdate(req.user._id, { name, email, avatar }, { new: true });
+    const { name, email, businessName, gstNumber, whatsapp, visitingCard } = req.body;
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    
+    if (name) user.name = name;
+    if (email !== undefined) user.email = email;
+    if (businessName !== undefined) user.businessName = businessName;
+    if (gstNumber !== undefined) user.gstNumber = gstNumber;
+    if (whatsapp !== undefined) user.whatsapp = whatsapp;
+    if (visitingCard !== undefined) user.visitingCard = visitingCard;
+    
+    await user.save();
     res.json({ success: true, user });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
-  }
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
 // POST /api/auth/address
