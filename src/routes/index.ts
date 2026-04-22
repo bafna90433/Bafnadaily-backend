@@ -900,16 +900,21 @@ export const staffReportsRouter = express.Router();
 
 staffReportsRouter.get('/', adminProtect, async (req: Request, res: Response) => {
   try {
-    const { folderId } = req.query;
+    const { folderId, search } = req.query;
     const query: any = {};
 
-    if (folderId === 'root' || !folderId) {
-      query.folderId = { $in: [null, undefined] };
+    if (search) {
+      // Global search ignores folderId
+      query.productCode = { $regex: search, $options: 'i' };
     } else {
-      query.folderId = folderId;
+      if (folderId === 'root' || !folderId) {
+        query.folderId = { $in: [null, undefined] };
+      } else {
+        query.folderId = folderId;
+      }
     }
 
-    const reports = await StaffReport.find(query).sort({ createdAt: -1 }).limit(100);
+    const reports = await StaffReport.find(query).sort({ createdAt: -1 }).limit(search ? 300 : 100);
     res.json({ success: true, reports });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
