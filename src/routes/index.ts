@@ -884,6 +884,16 @@ adminRouter.get('/dashboard', adminProtect, async (req: Request, res: Response) 
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+adminRouter.get('/abandoned-carts', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const carts = await Cart.find({ 'items.0': { $exists: true } })
+      .populate('user', 'name phone whatsapp')
+      .populate('items.product', 'name images price sku')
+      .sort({ updatedAt: -1 });
+    res.json({ success: true, carts });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 adminRouter.get('/users', adminProtect, async (req: Request, res: Response) => {
   try {
     const { page = 1, limit = 20, search } = req.query as any;
