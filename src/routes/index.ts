@@ -369,7 +369,9 @@ categoriesRouter.get('/', async (req: Request, res: Response) => {
 
 categoriesRouter.get('/all', async (req: Request, res: Response) => {
   try {
-    const categories = await Category.find({ isActive: true }).populate('parent', 'name').sort({ sortOrder: 1 });
+    const { admin } = req.query as any;
+    const query = admin === 'true' ? {} : { isActive: true };
+    const categories = await Category.find(query).populate('parent', 'name').sort({ sortOrder: 1 });
     res.json({ success: true, categories });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
