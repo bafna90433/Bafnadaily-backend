@@ -29,7 +29,7 @@ export const productsRouter = express.Router();
 productsRouter.get('/', async (req: Request, res: Response) => {
   try {
     const { category, categoryIds: categoryIdsParam, search, minPrice, maxPrice, sort, page = 1, limit = 20, featured, trending, newArrival, bestSeller, tag, admin } = req.query as any;
-    const query: any = admin === 'true' ? {} : { isActive: { $ne: false } };
+    const query: any = admin === 'true' ? { isDeleted: { $ne: true } } : { isActive: { $ne: false }, isDeleted: { $ne: true } };
 
     if (categoryIdsParam) {
       // Multiple IDs from frontend (parent + all subs already resolved)
@@ -343,7 +343,7 @@ productsRouter.put('/:id', adminProtect, async (req: Request, res: Response) => 
 
 productsRouter.delete('/:id', adminProtect, async (req: Request, res: Response) => {
   try {
-    await Product.findByIdAndUpdate(req.params.id, { isActive: false });
+    await Product.findByIdAndUpdate(req.params.id, { isActive: false, isDeleted: true });
     res.json({ success: true, message: 'Product deleted' });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -438,6 +438,8 @@ categoriesRouter.put('/:id', adminProtect, async (req: Request, res: Response) =
 categoriesRouter.delete('/:id', adminProtect, async (req: Request, res: Response) => {
   try {
     await Category.findByIdAndUpdate(req.params.id, { isActive: false });
+    // Also soft-delete all subcategories to prevent orphaned active subcategories
+    await Category.updateMany({ parent: req.params.id }, { isActive: false });
     res.json({ success: true });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -1021,6 +1023,52 @@ staffReportsRouter.delete('/folders/:id', adminProtect, async (req: Request, res
     await StaffFolder.findByIdAndDelete(folderId);
     res.json({ success: true, message: 'Folder deleted' });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+staffReportsRouter.get('/folders/:id/download-zip', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const folderId = req.params.id;
+    let folderName = 'Root';
+    if (folderId !== 'root') {
+      const folder = await StaffFolder.findById(folderId);
+      if (folder) folderName = folder.name;
+    }
+    
+    const reports = await StaffReport.find({ folderId: folderId === 'root' ? null : folderId });
+    if (reports.length === 0) {
+      return res.status(404).json({ success: false, message: 'No reports found in this folder' });
+    }
+
+    const archiver = require('archiver');
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${folderName}_reports.zip"`);
+    archive.pipe(res);
+
+    let count = 0;
+    for (const report of reports) {
+      if (report.imageUrl) {
+        try {
+          const response = await axios.get(report.imageUrl, { responseType: 'stream' });
+          const ext = report.imageUrl.split('.').pop()?.split('?')[0] || 'jpg';
+          const filename = `${report.productCode || report.staffName}_${report._id}.${ext}`;
+          archive.append(response.data, { name: filename });
+          count++;
+        } catch (err) {
+          console.error('Error fetching image for zip:', err);
+        }
+      }
+    }
+    
+    if (count === 0) {
+      archive.append('No readable images found.', { name: 'error.txt' });
+    }
+    
+    await archive.finalize();
+  } catch (err: any) { 
+    if (!res.headersSent) res.status(500).json({ success: false, message: err.message }); 
+  }
 });
 
 staffReportsRouter.patch('/move', adminProtect, async (req: Request, res: Response) => {

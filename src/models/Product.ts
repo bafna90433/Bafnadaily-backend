@@ -61,6 +61,7 @@ export interface IProduct extends Document {
   isNewArrival: boolean;
   isBestSeller: boolean;
   giftWrapping: boolean;
+  isDeleted: boolean;
   material?: string;
   colors: { name: string; hex: string }[];
   weight?: number;
@@ -97,6 +98,7 @@ const productSchema = new Schema<IProduct>(
     isNewArrival: { type: Boolean, default: false },
     isBestSeller: { type: Boolean, default: false },
     giftWrapping: { type: Boolean, default: false },
+    isDeleted: { type: Boolean, default: false },
     material: String,
     colors: [{ name: String, hex: String }],
     weight: Number,
