@@ -515,7 +515,7 @@ ordersRouter.post('/', protect, async (req: AuthRequest, res: Response) => {
     for (const item of items) {
       const product = await Product.findById(item.productId);
       if (!product || !product.isActive) continue;
-      orderItems.push({ product: product._id, name: product.name, image: product.images[0]?.url, price: product.price, quantity: item.quantity, variant: item.variant });
+      orderItems.push({ product: product._id, name: product.name, image: product.images[0]?.url, price: product.price, quantity: item.quantity, variant: item.variant, sku: product.sku || '' });
       subtotal += product.price * item.quantity;
       product.stock = Math.max(0, product.stock - item.quantity);
       product.sold += item.quantity;
@@ -562,12 +562,43 @@ ordersRouter.post('/', protect, async (req: AuthRequest, res: Response) => {
         });
         await Order.findByIdAndUpdate(order._id, { 'wa.orderConfirmedSent': true, 'wa.lastSentAt': new Date() });
       } catch (waErr: any) {
-        await Order.findByIdAndUpdate(order._id, { 'wa.lastError': waErr?.message || 'WA failed' });
+        const waErrMsg = waErr?.response?.data ? JSON.stringify(waErr.response.data) : (waErr?.message || 'WA failed');
+        console.error('[WA Order Confirmed Error]', waErrMsg);
+        await Order.findByIdAndUpdate(order._id, { 'wa.lastError': waErrMsg });
       }
     }
 
     res.status(201).json({ success: true, order });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+ordersRouter.post('/:id/resend-wa', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const order = await Order.findById(req.params.id).populate('user', 'name phone whatsapp') as any;
+    if (!order) return res.status(404).json({ success: false, message: 'Not found' });
+    const waTo = sanitizePhone((order.user as any)?.whatsapp || (order.user as any)?.phone || order.shippingAddress?.phone);
+    if (!waTo) return res.status(400).json({ success: false, message: 'No phone number' });
+    await sendWhatsAppTemplate({
+      to: waTo,
+      templateName: process.env.WA_ORDER_TEMPLATE || 'order_confirmed_new',
+      languageCode: 'en_US',
+      components: [{
+        type: 'body',
+        parameters: [
+          { type: 'text', text: String((order.user as any)?.name || 'Customer') },
+          { type: 'text', text: String(order.orderNumber || '') },
+          { type: 'text', text: String(order.total) },
+        ],
+      }],
+    });
+    await Order.findByIdAndUpdate(order._id, { 'wa.orderConfirmedSent': true, 'wa.lastSentAt': new Date(), 'wa.lastError': '' });
+    res.json({ success: true });
+  } catch (err: any) {
+    const errMsg = err?.response?.data ? JSON.stringify(err.response.data) : err.message;
+    console.error('[WA Resend Error]', errMsg);
+    await Order.findByIdAndUpdate(req.params.id, { 'wa.lastError': errMsg });
+    res.status(500).json({ success: false, message: errMsg });
+  }
 });
 
 ordersRouter.get('/my', protect, async (req: AuthRequest, res: Response) => {
@@ -754,6 +785,18 @@ ordersRouter.put('/:id/status', adminProtect, async (req: Request, res: Response
 
     const updated = await Order.findById(order._id).populate('user', 'name phone');
     res.json({ success: true, order: updated });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+ordersRouter.put('/:id/payment-status', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { paymentStatus } = req.body;
+    if (!['pending', 'paid', 'failed', 'refunded'].includes(paymentStatus)) {
+      return res.status(400).json({ success: false, message: 'Invalid payment status' });
+    }
+    const order = await Order.findByIdAndUpdate(req.params.id, { paymentStatus }, { new: true }).populate('user', 'name phone');
+    if (!order) return res.status(404).json({ success: false, message: 'Not found' });
+    res.json({ success: true, order });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 

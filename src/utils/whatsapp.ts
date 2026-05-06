@@ -1,8 +1,14 @@
 import axios from 'axios';
 
+interface WaParameter {
+  type: string;
+  text?: string;
+  [key: string]: any;
+}
+
 interface WaComponent {
   type: string;
-  parameters?: { type: string; text: string }[];
+  parameters?: WaParameter[];
   sub_type?: string;
   index?: string;
 }
@@ -21,6 +27,16 @@ export function sanitizePhone(phone?: string): string {
   return digits;
 }
 
+function normalizeComponents(components: WaComponent[]): WaComponent[] {
+  return components.map((comp) => ({
+    ...comp,
+    parameters: comp.parameters?.map((p) => ({
+      type: p.type,
+      text: String(p.text ?? ''),
+    })),
+  }));
+}
+
 export async function sendWhatsAppTemplate({ to, templateName, languageCode = 'en_US', components = [] }: SendWaTemplateOptions): Promise<void> {
   const phoneNumberId = process.env.WA_PHONE_NUMBER_ID;
   const accessToken = process.env.WA_ACCESS_TOKEN;
@@ -31,25 +47,32 @@ export async function sendWhatsAppTemplate({ to, templateName, languageCode = 'e
   }
 
   const url = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
+  const safeComponents = normalizeComponents(components);
 
   const payload: any = {
     messaging_product: 'whatsapp',
+    recipient_type: 'individual',
     to,
     type: 'template',
     template: {
       name: templateName,
       language: { code: languageCode },
+      ...(safeComponents.length ? { components: safeComponents } : {}),
     },
   };
 
-  if (components.length > 0) {
-    payload.template.components = components;
+  try {
+    await axios.post(url, payload, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      timeout: 15000,
+    });
+  } catch (err: any) {
+    const detail = err?.response?.data ? JSON.stringify(err.response.data) : err?.message;
+    console.error('[WA] sendWhatsAppTemplate failed:', detail);
+    console.error('[WA] payload was:', JSON.stringify(payload));
+    throw err;
   }
-
-  await axios.post(url, payload, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-  });
 }
