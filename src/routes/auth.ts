@@ -49,24 +49,28 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
     const isNew = !user;
 
     if (!user) {
+      const { businessName, gstNumber, whatsapp, visitingCard } = req.body;
+      if (!whatsapp || !/^\d{10}$/.test(whatsapp)) {
+        return res.status(400).json({ success: false, message: 'Valid 10-digit WhatsApp number is required' });
+      }
       user = await User.create({ 
         phone, 
         name: name || `User_${phone.slice(-4)}`,
-        businessName: req.body.businessName,
-        gstNumber: req.body.gstNumber,
-        whatsapp: req.body.whatsapp || phone,
-        visitingCard: req.body.visitingCard
+        businessName,
+        gstNumber,
+        whatsapp,
+        visitingCard
       });
     } else {
       if (user.isBlocked) {
         return res.status(403).json({ success: false, message: 'Your account has been suspended. Contact support.' });
       }
       user.lastLogin = new Date();
-      if (name && !user.name) user.name = name;
-      if (req.body.businessName && !user.businessName) user.businessName = req.body.businessName;
-      if (req.body.gstNumber && !user.gstNumber) user.gstNumber = req.body.gstNumber;
-      if (req.body.whatsapp && !user.whatsapp) user.whatsapp = req.body.whatsapp;
-      if (req.body.visitingCard && !user.visitingCard) user.visitingCard = req.body.visitingCard;
+      if (name) user.name = name;
+      if (req.body.businessName) user.businessName = req.body.businessName;
+      if (req.body.gstNumber) user.gstNumber = req.body.gstNumber;
+      if (req.body.whatsapp) user.whatsapp = req.body.whatsapp;
+      if (req.body.visitingCard) user.visitingCard = req.body.visitingCard;
       await user.save();
     }
 
@@ -77,6 +81,7 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
         _id: user._id, name: user.name, phone: user.phone, email: user.email,
         avatar: user.avatar, customerType: user.customerType,
         isSpecialCustomer: user.isSpecialCustomer, codEnabled: user.codEnabled,
+        whatsapp: user.whatsapp, businessName: user.businessName, gstNumber: user.gstNumber, visitingCard: user.visitingCard,
       },
     });
   } catch (err: any) {
@@ -125,10 +130,10 @@ router.post('/google', async (req: Request, res: Response) => {
       if (!user.googleId) { user.googleId = googleId; updated = true; }
       if (!user.email) { user.email = email; updated = true; }
       if (!user.avatar) { user.avatar = picture; updated = true; }
-      if (req.body.businessName && !user.businessName) { user.businessName = req.body.businessName; updated = true; }
-      if (req.body.gstNumber && !user.gstNumber) { user.gstNumber = req.body.gstNumber; updated = true; }
-      if (req.body.whatsapp && !user.whatsapp) { user.whatsapp = req.body.whatsapp; updated = true; }
-      if (req.body.visitingCard && !user.visitingCard) { user.visitingCard = req.body.visitingCard; updated = true; }
+      if (req.body.businessName) { user.businessName = req.body.businessName; updated = true; }
+      if (req.body.gstNumber) { user.gstNumber = req.body.gstNumber; updated = true; }
+      if (req.body.whatsapp) { user.whatsapp = req.body.whatsapp; updated = true; }
+      if (req.body.visitingCard) { user.visitingCard = req.body.visitingCard; updated = true; }
       if (updated) await user.save();
     }
 
@@ -136,6 +141,7 @@ router.post('/google', async (req: Request, res: Response) => {
     res.json({
       success: true,
       token,
+      isNew,
       user: {
         _id: user._id,
         name: user.name,
@@ -145,6 +151,10 @@ router.post('/google', async (req: Request, res: Response) => {
         customerType: user.customerType,
         isSpecialCustomer: user.isSpecialCustomer,
         codEnabled: user.codEnabled,
+        whatsapp: user.whatsapp,
+        businessName: user.businessName,
+        gstNumber: user.gstNumber,
+        visitingCard: user.visitingCard,
       },
     });
   } catch (err: any) {

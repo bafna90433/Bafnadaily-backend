@@ -12,6 +12,7 @@ import { StaffReport } from '../models/StaffReport';
 import { StaffFolder } from '../models/StaffFolder';
 import { StaffFeedback } from '../models/StaffFeedback';
 import { DealOfDay } from '../models/DealOfDay';
+import { SiteSettings } from '../models/Settings';
 import { StaffReport as StaffReportModel } from '../models/StaffReport'; // Just in case of conflicts
 import { protect } from '../middleware/auth';
 import { adminProtect } from '../middleware/auth';
@@ -530,8 +531,13 @@ ordersRouter.post('/', protect, async (req: AuthRequest, res: Response) => {
         await coupon.save();
       }
     }
-    const shippingCharge = subtotal > 499 ? 0 : 49;
-    const total = subtotal - discount + shippingCharge + (giftWrapping ? 29 : 0);
+    const settings = await SiteSettings.findOne();
+    const freeShippingThreshold = settings?.freeShippingAbove ?? 499;
+    const standardShipping = settings?.standardShippingCharge ?? 49;
+    const giftWrapPrice = settings?.giftWrapCharge ?? 29;
+
+    const shippingCharge = subtotal >= freeShippingThreshold ? 0 : standardShipping;
+    const total = subtotal - discount + shippingCharge + (giftWrapping ? giftWrapPrice : 0);
     const order = await Order.create({
       user: req.user._id, items: orderItems, shippingAddress, paymentMethod, couponCode,
       giftWrapping, giftMessage, notes, subtotal, discount, shippingCharge, total,
