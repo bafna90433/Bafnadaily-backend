@@ -440,10 +440,11 @@ categoriesRouter.put('/:id', adminProtect, async (req: Request, res: Response) =
 
 categoriesRouter.delete('/:id', adminProtect, async (req: Request, res: Response) => {
   try {
-    await Category.findByIdAndUpdate(req.params.id, { isActive: false });
-    // Also soft-delete all subcategories to prevent orphaned active subcategories
-    await Category.updateMany({ parent: req.params.id }, { isActive: false });
-    res.json({ success: true });
+    // Delete the category itself
+    await Category.findByIdAndDelete(req.params.id);
+    // Delete all subcategories
+    await Category.deleteMany({ parent: req.params.id });
+    res.json({ success: true, message: 'Category and its subcategories deleted successfully' });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
