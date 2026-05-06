@@ -107,6 +107,7 @@ router.post('/google', async (req: Request, res: Response) => {
 
     // Find by googleId first, then by email
     let user = await User.findOne({ $or: [{ googleId }, { email }] });
+    const isNew = !user;
 
     if (!user) {
       user = await User.create({
