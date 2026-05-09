@@ -24,6 +24,18 @@ import getImageKit from '../config/imagekit';
 const storage = multer.memoryStorage();
 const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 
+// ─── UTILS ──────────────────────────────────────────────────────────────────
+async function generateUniqueSlug(Model: any, name: string): Promise<string> {
+  const base = slugify(name, { lower: true, strict: true });
+  let slug = base;
+  let counter = 1;
+  while (await Model.findOne({ slug })) {
+    slug = `${base}-${counter}`;
+    counter++;
+  }
+  return slug;
+}
+
 // ─── PRODUCTS ─────────────────────────────────────────────────────────────────
 export const productsRouter = express.Router();
 
@@ -158,8 +170,7 @@ productsRouter.post('/:id/review', protect, async (req: AuthRequest, res: Respon
 
 productsRouter.post('/', adminProtect, async (req: Request, res: Response) => {
   try {
-    const base = slugify(req.body.name, { lower: true, strict: true });
-    const slug = `${base}-${Date.now()}`;
+    const slug = await generateUniqueSlug(Product, req.body.name);
     const product = await Product.create({ ...req.body, slug });
     res.status(201).json({ success: true, product });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
@@ -331,13 +342,15 @@ productsRouter.get('/inventory/stats/today', adminProtect, async (req: Request, 
 
 productsRouter.put('/:id', adminProtect, async (req: Request, res: Response) => {
   try {
-    // Use $set so arrays (colors, images, variants) are properly replaced
-    const product = await Product.findByIdAndUpdate(
-      req.params.id,
-      { $set: req.body },
-      { new: true, runValidators: false }
-    );
+    const product = await Product.findById(req.params.id);
     if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
+    
+    // Update fields
+    Object.assign(product, req.body);
+    
+    // Using .save() triggers the pre-save middleware (which recalculates the discount)
+    await product.save();
+    
     res.json({ success: true, product });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -388,7 +401,7 @@ categoriesRouter.get('/:slug', async (req: Request, res: Response) => {
 
 categoriesRouter.post('/', adminProtect, async (req: Request, res: Response) => {
   try {
-    const slug = slugify(req.body.name, { lower: true, strict: true });
+    const slug = await generateUniqueSlug(Category, req.body.name);
     const category = await Category.create({ ...req.body, slug });
     res.status(201).json({ success: true, category });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }

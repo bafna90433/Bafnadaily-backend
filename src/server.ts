@@ -12,6 +12,7 @@ import {
   productsRouter, categoriesRouter, cartRouter, ordersRouter,
   wishlistRouter, uploadRouter, bannersRouter, couponsRouter, adminRouter, staffReportsRouter, dealsRouter
 } from './routes/index';
+import sitemapRouter from './routes/sitemap';
 
 dotenv.config();
 connectDB();
@@ -55,6 +56,7 @@ app.use('/api/admin', adminRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/staff-reports', staffReportsRouter);
 app.use('/api/deals-of-day', dealsRouter);
+app.use('/api/seo', sitemapRouter);
 
 app.use((req: any, res: any) => res.status(404).json({ success: false, message: 'Route not found' }));
 app.use((err: any, req: any, res: any, _next: any) => {
