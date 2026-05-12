@@ -44,7 +44,7 @@ const addressSchema = new Schema({
 const userSchema = new Schema<IUser>(
   {
     name: { type: String, trim: true, default: '' },
-    phone: { type: String, sparse: true, unique: true },
+    phone: { type: String, sparse: true, unique: true, default: undefined },
     email: { type: String, trim: true, lowercase: true, sparse: true, unique: true },
     googleId: { type: String, sparse: true, unique: true },
     avatar: { type: String, default: '' },
