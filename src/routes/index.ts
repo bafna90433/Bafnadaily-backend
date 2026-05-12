@@ -368,7 +368,7 @@ productsRouter.delete('/bulk', adminProtect, async (req: Request, res: Response)
       return res.status(403).json({ success: false, message: 'Delete password not set in Settings → Advanced.' });
     }
     if (password !== settings.deletePassword) {
-      return res.status(401).json({ success: false, message: 'Incorrect delete password' });
+      return res.status(400).json({ success: false, message: 'Incorrect delete password ❌' });
     }
     const result = await Product.updateMany(
       { _id: { $in: ids } },
@@ -859,7 +859,7 @@ ordersRouter.delete('/bulk', adminProtect, async (req: Request, res: Response) =
       return res.status(403).json({ success: false, message: 'Delete password not set in Settings → Advanced.' });
     }
     if (password !== settings.deletePassword) {
-      return res.status(401).json({ success: false, message: 'Incorrect delete password' });
+      return res.status(400).json({ success: false, message: 'Incorrect delete password ❌' });
     }
 
     const result = await Order.deleteMany({ _id: { $in: ids } });
@@ -879,7 +879,7 @@ ordersRouter.delete('/:id', adminProtect, async (req: Request, res: Response) =>
       return res.status(403).json({ success: false, message: 'Delete password not set in Settings. Please set it from Admin → Settings → Advanced.' });
     }
     if (password !== settings.deletePassword) {
-      return res.status(401).json({ success: false, message: 'Incorrect delete password' });
+      return res.status(400).json({ success: false, message: 'Incorrect delete password ❌' });
     }
 
     const order = await Order.findByIdAndDelete(req.params.id);
