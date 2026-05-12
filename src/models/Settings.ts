@@ -79,6 +79,7 @@ export interface ISiteSettings extends Document {
   metaPixelEnabled: boolean;
   googleAnalyticsId: string;
   googleAnalyticsEnabled: boolean;
+  deletePassword: string; // Password required to delete an order from admin panel
 }
 
 const siteSettingsSchema = new Schema<ISiteSettings>(
@@ -153,6 +154,7 @@ const siteSettingsSchema = new Schema<ISiteSettings>(
     metaPixelEnabled: { type: Boolean, default: false },
     googleAnalyticsId: { type: String, default: '' },
     googleAnalyticsEnabled: { type: Boolean, default: false },
+    deletePassword: { type: String, default: '' }, // Admin sets this in Settings → Advanced
   },
   { timestamps: true }
 );

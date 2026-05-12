@@ -820,6 +820,29 @@ ordersRouter.put('/:id/payment-status', adminProtect, async (req: Request, res: 
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+// ── DELETE Order (Admin only, requires deletePassword from Settings) ──────────
+ordersRouter.delete('/:id', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { password } = req.body;
+    if (!password) return res.status(400).json({ success: false, message: 'Delete password required' });
+
+    // Verify against Settings deletePassword
+    const settings = await SiteSettings.findOne().select('deletePassword');
+    if (!settings?.deletePassword) {
+      return res.status(403).json({ success: false, message: 'Delete password not set in Settings. Please set it from Admin → Settings → Advanced.' });
+    }
+    if (password !== settings.deletePassword) {
+      return res.status(401).json({ success: false, message: 'Incorrect delete password' });
+    }
+
+    const order = await Order.findByIdAndDelete(req.params.id);
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+
+    res.json({ success: true, message: `Order #${(order as any).orderNumber} deleted successfully` });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+
 // ─── WISHLIST ─────────────────────────────────────────────────────────────────
 export const wishlistRouter = express.Router();
 
