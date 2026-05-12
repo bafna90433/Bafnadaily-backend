@@ -820,6 +820,29 @@ ordersRouter.put('/:id/payment-status', adminProtect, async (req: Request, res: 
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+// ── BULK DELETE Orders (Admin only, requires deletePassword) ─────────────────
+ordersRouter.delete('/bulk', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { password, ids } = req.body;
+    if (!password) return res.status(400).json({ success: false, message: 'Delete password required' });
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, message: 'No order IDs provided' });
+    }
+
+    // Verify password from Settings
+    const settings = await SiteSettings.findOne().select('deletePassword');
+    if (!settings?.deletePassword) {
+      return res.status(403).json({ success: false, message: 'Delete password not set in Settings → Advanced.' });
+    }
+    if (password !== settings.deletePassword) {
+      return res.status(401).json({ success: false, message: 'Incorrect delete password' });
+    }
+
+    const result = await Order.deleteMany({ _id: { $in: ids } });
+    res.json({ success: true, message: `${result.deletedCount} order(s) deleted successfully`, deletedCount: result.deletedCount });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 // ── DELETE Order (Admin only, requires deletePassword from Settings) ──────────
 ordersRouter.delete('/:id', adminProtect, async (req: Request, res: Response) => {
   try {
