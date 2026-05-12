@@ -355,12 +355,36 @@ productsRouter.put('/:id', adminProtect, async (req: Request, res: Response) => 
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+// ── BULK DELETE Products (Admin only, requires deletePassword) ────────────────
+productsRouter.delete('/bulk', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { password, ids } = req.body;
+    if (!password) return res.status(400).json({ success: false, message: 'Delete password required' });
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, message: 'No product IDs provided' });
+    }
+    const settings = await SiteSettings.findOne().select('deletePassword');
+    if (!settings?.deletePassword) {
+      return res.status(403).json({ success: false, message: 'Delete password not set in Settings → Advanced.' });
+    }
+    if (password !== settings.deletePassword) {
+      return res.status(401).json({ success: false, message: 'Incorrect delete password' });
+    }
+    const result = await Product.updateMany(
+      { _id: { $in: ids } },
+      { isActive: false, isDeleted: true }
+    );
+    res.json({ success: true, message: `${result.modifiedCount} product(s) deleted successfully`, deletedCount: result.modifiedCount });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 productsRouter.delete('/:id', adminProtect, async (req: Request, res: Response) => {
   try {
     await Product.findByIdAndUpdate(req.params.id, { isActive: false, isDeleted: true });
     res.json({ success: true, message: 'Product deleted' });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
+
 
 // ─── CATEGORIES ───────────────────────────────────────────────────────────────
 export const categoriesRouter = express.Router();
