@@ -98,7 +98,7 @@ router.get(['/facebook', '/facebook.csv'], async (_req: any, res: any) => {
 
 // ── GET /api/feed/info  → returns the public feed URL (for frontend "Copy" btn) ─
 router.get('/info', (_req: any, res: any) => {
-  const backendUrl = process.env.BACKEND_URL || 'https://bafnadaily-api.onrender.com';
+  const backendUrl = process.env.BACKEND_URL || 'https://api.bafnadaily.com';
   res.json({
     success: true,
     feedUrl: `${backendUrl}/api/feed/facebook.csv`,
