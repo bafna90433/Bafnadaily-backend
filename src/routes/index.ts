@@ -554,7 +554,7 @@ ordersRouter.post('/', protect, async (req: AuthRequest, res: Response) => {
     for (const item of items) {
       const product = await Product.findById(item.productId);
       if (!product || !product.isActive) continue;
-      orderItems.push({ product: product._id, name: product.name, image: product.images[0]?.url, price: product.price, quantity: item.quantity, variant: item.variant, sku: product.sku || '' });
+      orderItems.push({ product: product._id, name: product.name, image: product.images[0]?.url, price: product.price, mrp: product.mrp || product.price, quantity: item.quantity, variant: item.variant, sku: product.sku || '' });
       subtotal += product.price * item.quantity;
       product.stock = Math.max(0, product.stock - item.quantity);
       product.sold += item.quantity;
