@@ -17,8 +17,8 @@ function escCsv(val: any): string {
   return `"${s}"`;
 }
 
-// ── GET /api/feed/facebook  → CSV feed for Facebook Commerce Manager ──────────
-router.get('/facebook', async (_req: any, res: any) => {
+// ── GET /api/feed/facebook  (also /facebook.csv) → CSV feed for Facebook Commerce Manager ──
+router.get(['/facebook', '/facebook.csv'], async (_req: any, res: any) => {
   try {
     const products = await Product.find({ isActive: true, isDeleted: false, stock: { $gt: 0 } })
       .populate('category', 'name')
@@ -101,7 +101,7 @@ router.get('/info', (_req: any, res: any) => {
   const backendUrl = process.env.BACKEND_URL || 'https://bafnadaily-api.onrender.com';
   res.json({
     success: true,
-    feedUrl: `${backendUrl}/api/feed/facebook`,
+    feedUrl: `${backendUrl}/api/feed/facebook.csv`,
     instructions: 'Paste this URL in Facebook Commerce Manager → Catalogue → Add Products → Use a URL or Google Sheets',
   });
 });
