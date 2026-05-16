@@ -842,6 +842,55 @@ ordersRouter.put('/:id/status', adminProtect, async (req: Request, res: Response
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+// ── GET /api/orders/:id/tracking  → Live tracking from Delhivery ─────────────
+ordersRouter.get('/:id/tracking', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const order = await Order.findById(req.params.id).select('trackingNumber courierName orderNumber').lean() as any;
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+    if (!order.trackingNumber) return res.status(400).json({ success: false, message: 'No tracking number' });
+
+    const courier = (order.courierName || '').toLowerCase();
+
+    if (courier.includes('delhivery')) {
+      const resp = await axios.get(
+        `https://track.delhivery.com/api/v1/packages/json/?waybill=${order.trackingNumber}&token=${process.env.DELHIVERY_API_KEY}`
+      );
+      const shipment = resp.data?.ShipmentData?.[0]?.Shipment;
+      if (!shipment) return res.status(200).json({ success: true, provider: 'delhivery', raw: resp.data, scans: [], status: 'Unknown' });
+
+      const scans = (shipment.Scans || []).map((s: any) => ({
+        status: s.ScanDetail?.Instructions || s.ScanDetail?.Scan || '',
+        location: s.ScanDetail?.ScannedLocation || '',
+        time: s.ScanDetail?.StatusDateTime || s.ScanDetail?.StatusDate || '',
+      }));
+
+      return res.json({
+        success: true,
+        provider: 'delhivery',
+        waybill: order.trackingNumber,
+        status: shipment.Status,
+        statusCode: shipment.StatusCode,
+        expectedDelivery: shipment.ExpectedDeliveryDate,
+        origin: shipment.Origin,
+        destination: shipment.Destination,
+        scans,
+        trackUrl: `https://www.delhivery.com/track-v2/package/${order.trackingNumber}`,
+      });
+    }
+
+    // Non-Delhivery: return generic track link
+    return res.json({
+      success: true,
+      provider: 'other',
+      waybill: order.trackingNumber,
+      trackUrl: `https://www.google.com/search?q=${encodeURIComponent(order.trackingNumber + ' ' + order.courierName + ' tracking')}`,
+      scans: [],
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 ordersRouter.put('/:id/payment-status', adminProtect, async (req: Request, res: Response) => {
   try {
     const { paymentStatus } = req.body;
