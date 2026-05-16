@@ -723,7 +723,7 @@ ordersRouter.put('/:id/status', adminProtect, async (req: Request, res: Response
           const BOX_DIMS: Record<string, { l: number; b: number; h: number }> = {
             A28: { l: 47, b: 36, h: 25 }, A06: { l: 44.5, b: 35, h: 34.5 },
             A08: { l: 47, b: 35.5, h: 47 }, A31: { l: 89, b: 48, h: 40 },
-            A18: { l: 44, b: 20, h: 45 },
+            A18: { l: 44, b: 20, h: 45 }, CVR: { l: 28, b: 20, h: 2 },
           };
           let totalWeightGrams = 0;
           let dims = BOX_DIMS['A28'];
