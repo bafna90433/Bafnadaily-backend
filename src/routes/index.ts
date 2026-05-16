@@ -728,8 +728,18 @@ ordersRouter.put('/:id/status', adminProtect, async (req: Request, res: Response
           let totalWeightGrams = 0;
           let dims = BOX_DIMS['A28'];
           packingDetails.forEach((box: any) => {
-            totalWeightGrams += (Number(box.totalWeight) || 0) * 1000;
-            if (BOX_DIMS[box.boxType]) dims = BOX_DIMS[box.boxType];
+            // CVR: use custom weight if provided
+            if (box.boxType === 'CVR' && box.customWeightKg) {
+              totalWeightGrams += box.customWeightKg * 1000 * (box.quantity || 1);
+            } else {
+              totalWeightGrams += (Number(box.totalWeight) || 0) * 1000;
+            }
+            // CVR: use custom dims if provided, else fallback to BOX_DIMS
+            if (box.boxType === 'CVR' && box.customDims) {
+              dims = box.customDims;
+            } else if (BOX_DIMS[box.boxType]) {
+              dims = BOX_DIMS[box.boxType];
+            }
           });
 
           const addr = order.shippingAddress;
