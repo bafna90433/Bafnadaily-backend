@@ -1103,6 +1103,45 @@ adminRouter.get('/abandoned-carts', adminProtect, async (req: Request, res: Resp
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+adminRouter.post('/abandoned-carts/:id/send-recovery', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const cart = await Cart.findById(req.params.id)
+      .populate('user', 'name phone whatsapp')
+      .populate('items.product', 'name price') as any;
+    if (!cart) return res.status(404).json({ success: false, message: 'Cart not found' });
+
+    const user = cart.user;
+    const phone = sanitizePhone(user?.whatsapp || user?.phone);
+    if (!phone) return res.status(400).json({ success: false, message: 'Customer ka phone number nahi hai' });
+
+    const customerName = user?.name || 'Customer';
+    const itemNames = cart.items
+      .slice(0, 3)
+      .map((it: any) => it.product?.name || 'Item')
+      .join(', ') + (cart.items.length > 3 ? ` +${cart.items.length - 3} more` : '');
+    const cartTotal = cart.items.reduce((sum: number, it: any) => sum + (it.product?.price || 0) * it.quantity, 0);
+
+    await sendWhatsAppTemplate({
+      to: phone,
+      templateName: 'cart_recovery',
+      languageCode: 'en_US',
+      components: [{
+        type: 'body',
+        parameters: [
+          { type: 'text', text: customerName },
+          { type: 'text', text: itemNames },
+          { type: 'text', text: String(cartTotal) },
+        ],
+      }],
+    });
+
+    res.json({ success: true, message: `Recovery message sent to ${customerName}` });
+  } catch (err: any) {
+    const msg = err?.response?.data ? JSON.stringify(err.response.data) : err.message;
+    res.status(500).json({ success: false, message: msg });
+  }
+});
+
 adminRouter.delete('/abandoned-carts/:id', adminProtect, async (req: Request, res: Response) => {
   try {
     await Cart.findByIdAndDelete(req.params.id);
