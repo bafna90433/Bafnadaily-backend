@@ -892,6 +892,18 @@ ordersRouter.get('/:id/tracking', adminProtect, async (req: Request, res: Respon
   }
 });
 
+ordersRouter.put('/:id/advance', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { advanceAmount } = req.body;
+    if (typeof advanceAmount !== 'number' || advanceAmount < 0) {
+      return res.status(400).json({ success: false, message: 'Invalid advanceAmount' });
+    }
+    const order = await Order.findByIdAndUpdate(req.params.id, { advanceAmount }, { new: true }).populate('user', 'name phone');
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+    res.json({ success: true, order });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 ordersRouter.put('/:id/payment-status', adminProtect, async (req: Request, res: Response) => {
   try {
     const { paymentStatus } = req.body;
