@@ -1123,7 +1123,7 @@ adminRouter.post('/abandoned-carts/:id/send-recovery', adminProtect, async (req:
 
     await sendWhatsAppTemplate({
       to: phone,
-      templateName: 'cart_recovery',
+      templateName: 'cart_recovery1',
       languageCode: 'en_US',
       components: [{
         type: 'body',
