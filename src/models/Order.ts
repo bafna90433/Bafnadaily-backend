@@ -16,6 +16,7 @@ export interface IOrder extends Document {
   discount: number;
   couponCode?: string;
   total: number;
+  advanceAmount?: number;
   giftWrapping: boolean;
   giftMessage?: string;
   notes?: string;
@@ -44,6 +45,7 @@ const orderSchema = new Schema<IOrder>(
     discount: { type: Number, default: 0 },
     couponCode: String,
     total: Number,
+    advanceAmount: { type: Number, default: 0 },
     giftWrapping: { type: Boolean, default: false },
     giftMessage: String,
     notes: String,

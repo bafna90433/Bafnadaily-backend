@@ -548,7 +548,7 @@ export const ordersRouter = express.Router();
 
 ordersRouter.post('/', protect, async (req: AuthRequest, res: Response) => {
   try {
-    const { items, shippingAddress, paymentMethod, couponCode, giftWrapping, giftMessage, notes, paymentId, paymentStatus } = req.body;
+    const { items, shippingAddress, paymentMethod, couponCode, giftWrapping, giftMessage, notes, paymentId, paymentStatus, advanceAmount } = req.body;
     let subtotal = 0;
     const orderItems: any[] = [];
     for (const item of items) {
@@ -579,6 +579,7 @@ ordersRouter.post('/', protect, async (req: AuthRequest, res: Response) => {
     const order = await Order.create({
       user: req.user._id, items: orderItems, shippingAddress, paymentMethod, couponCode,
       giftWrapping, giftMessage, notes, subtotal, discount, shippingCharge, total,
+      advanceAmount: advanceAmount || 0,
       paymentId, paymentStatus: paymentId ? 'paid' : 'pending',
       orderStatus: 'confirmed',
       statusHistory: [{ status: 'confirmed', note: 'Order placed', updatedAt: new Date() }],
