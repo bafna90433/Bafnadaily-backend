@@ -4,7 +4,8 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface IOrder extends Document {
   orderNumber: string;
   user: mongoose.Types.ObjectId;
-  items: { product: mongoose.Types.ObjectId; name: string; image?: string; price: number; mrp?: number; quantity: number; variant?: string; sku?: string }[];
+  items: { product: mongoose.Types.ObjectId; name: string; image?: string; price: number; mrp?: number; quantity: number; variant?: string; sku?: string; gstRate?: number }[];
+  gstin?: string;
   shippingAddress: { name: string; phone: string; addressLine1: string; addressLine2?: string; city: string; state: string; pincode: string };
   paymentMethod: 'cod' | 'online' | 'upi';
   paymentStatus: 'pending' | 'paid' | 'failed' | 'refunded';
@@ -33,7 +34,8 @@ const orderSchema = new Schema<IOrder>(
   {
     orderNumber: { type: String, unique: true },
     user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    items: [{ product: { type: Schema.Types.ObjectId, ref: 'Product' }, name: String, image: String, price: Number, mrp: Number, quantity: Number, variant: String, sku: String }],
+    items: [{ product: { type: Schema.Types.ObjectId, ref: 'Product' }, name: String, image: String, price: Number, mrp: Number, quantity: Number, variant: String, sku: String, gstRate: { type: Number, default: 0 } }],
+    gstin: { type: String, default: '' },
     shippingAddress: { name: String, phone: String, addressLine1: String, addressLine2: String, city: String, state: String, pincode: String },
     paymentMethod: { type: String, enum: ['cod', 'online', 'upi'], default: 'cod' },
     paymentStatus: { type: String, enum: ['pending', 'paid', 'failed', 'refunded'], default: 'pending' },

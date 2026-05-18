@@ -548,13 +548,13 @@ export const ordersRouter = express.Router();
 
 ordersRouter.post('/', protect, async (req: AuthRequest, res: Response) => {
   try {
-    const { items, shippingAddress, paymentMethod, couponCode, giftWrapping, giftMessage, notes, paymentId, paymentStatus, advanceAmount } = req.body;
+    const { items, shippingAddress, paymentMethod, couponCode, giftWrapping, giftMessage, notes, paymentId, paymentStatus, advanceAmount, gstin } = req.body;
     let subtotal = 0;
     const orderItems: any[] = [];
     for (const item of items) {
       const product = await Product.findById(item.productId);
       if (!product || !product.isActive) continue;
-      orderItems.push({ product: product._id, name: product.name, image: product.images[0]?.url, price: product.price, mrp: product.mrp || product.price, quantity: item.quantity, variant: item.variant, sku: product.sku || '' });
+      orderItems.push({ product: product._id, name: product.name, image: product.images[0]?.url, price: product.price, mrp: product.mrp || product.price, quantity: item.quantity, variant: item.variant, sku: product.sku || '', gstRate: product.gstRate || 0 });
       subtotal += product.price * item.quantity;
       product.stock = Math.max(0, product.stock - item.quantity);
       product.sold += item.quantity;
@@ -579,7 +579,7 @@ ordersRouter.post('/', protect, async (req: AuthRequest, res: Response) => {
     const order = await Order.create({
       user: req.user._id, items: orderItems, shippingAddress, paymentMethod, couponCode,
       giftWrapping, giftMessage, notes, subtotal, discount, shippingCharge, total,
-      advanceAmount: advanceAmount || 0,
+      advanceAmount: advanceAmount || 0, gstin: gstin || '',
       paymentId, paymentStatus: paymentId ? 'paid' : 'pending',
       orderStatus: 'confirmed',
       statusHistory: [{ status: 'confirmed', note: 'Order placed', updatedAt: new Date() }],

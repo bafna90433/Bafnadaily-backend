@@ -71,6 +71,7 @@ export interface IProduct extends Document {
   reorderLevel?: number;
   perPiecePrice?: string;
   perPacketText?: string;
+  gstRate?: number;
 }
 
 const productSchema = new Schema<IProduct>(
@@ -108,6 +109,7 @@ const productSchema = new Schema<IProduct>(
     reorderLevel: { type: Number, default: 0 },
     perPiecePrice: String,
     perPacketText: String,
+    gstRate: { type: Number, default: 0, enum: [0, 5, 12, 18, 28] },
   },
   { timestamps: true }
 );
