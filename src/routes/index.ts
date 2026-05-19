@@ -648,7 +648,15 @@ ordersRouter.post('/:id/resend-wa', adminProtect, async (req: Request, res: Resp
 
 ordersRouter.get('/my', protect, async (req: AuthRequest, res: Response) => {
   try {
-    const orders = await Order.find({ user: req.user._id }).sort({ createdAt: -1 });
+    const orders = await Order.find({ user: req.user._id })
+      .populate({
+        path: 'items.product',
+        populate: {
+          path: 'category',
+          select: 'name slug'
+        }
+      })
+      .sort({ createdAt: -1 });
     res.json({ success: true, orders });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -674,7 +682,14 @@ ordersRouter.get('/pending-reviews', protect, async (req: AuthRequest, res: Resp
 
 ordersRouter.get('/:id', protect, async (req: AuthRequest, res: Response) => {
   try {
-    const order = await Order.findById(req.params.id);
+    const order = await Order.findById(req.params.id)
+      .populate({
+        path: 'items.product',
+        populate: {
+          path: 'category',
+          select: 'name slug'
+        }
+      });
     if (!order) return res.status(404).json({ success: false, message: 'Not found' });
     if (order.user.toString() !== req.user._id.toString()) return res.status(403).json({ success: false, message: 'Not authorized' });
     res.json({ success: true, order });
@@ -700,7 +715,18 @@ ordersRouter.get('/', adminProtect, async (req: Request, res: Response) => {
     if (status) query.orderStatus = status;
     if (search) query.orderNumber = new RegExp(search, 'i');
     const total = await Order.countDocuments(query);
-    const orders = await Order.find(query).sort({ createdAt: -1 }).populate('user', 'name phone').limit(Number(limit)).skip((Number(page) - 1) * Number(limit));
+    const orders = await Order.find(query)
+      .populate('user', 'name phone')
+      .populate({
+        path: 'items.product',
+        populate: {
+          path: 'category',
+          select: 'name slug'
+        }
+      })
+      .sort({ createdAt: -1 })
+      .limit(Number(limit))
+      .skip((Number(page) - 1) * Number(limit));
     res.json({ success: true, orders, total });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
