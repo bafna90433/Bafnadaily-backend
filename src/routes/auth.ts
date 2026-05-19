@@ -24,7 +24,7 @@ router.post('/send-otp', async (req: Request, res: Response) => {
     await OTP.deleteMany({ phone });
     await OTP.create({ phone, otp });
     await sendOTP(phone, otp);
-    res.json({ success: true, message: 'OTP sent successfully' });
+    res.json({ success: true, message: 'OTP sent successfully', isNew: !existing });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
   }
