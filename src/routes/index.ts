@@ -490,7 +490,14 @@ export const cartRouter = express.Router();
 
 cartRouter.get('/', protect, async (req: AuthRequest, res: Response) => {
   try {
-    let cart = await Cart.findOne({ user: req.user._id }).populate('items.product', 'name images price mrp stock isActive slug');
+    let cart = await Cart.findOne({ user: req.user._id }).populate({
+      path: 'items.product',
+      select: 'name images price mrp stock isActive slug gstRate sku category',
+      populate: {
+        path: 'category',
+        select: 'name slug'
+      }
+    });
     if (!cart) cart = { items: [] } as any;
     res.json({ success: true, cart });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
@@ -507,7 +514,14 @@ cartRouter.post('/add', protect, async (req: AuthRequest, res: Response) => {
     if (existing) { existing.quantity += quantity; }
     else { (cart as any).items.push({ product: productId, quantity, variant, price: product.price }); }
     await (cart as any).save();
-    await (cart as any).populate('items.product', 'name images price mrp stock slug');
+    await (cart as any).populate({
+      path: 'items.product',
+      select: 'name images price mrp stock isActive slug gstRate sku category',
+      populate: {
+        path: 'category',
+        select: 'name slug'
+      }
+    });
     res.json({ success: true, cart });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -521,7 +535,14 @@ cartRouter.put('/update', protect, async (req: AuthRequest, res: Response) => {
     if (!item) return res.status(404).json({ success: false, message: 'Item not found' });
     if (quantity <= 0) { cart.items.pull(itemId); } else { item.quantity = quantity; }
     await cart.save();
-    await cart.populate('items.product', 'name images price mrp stock slug');
+    await cart.populate({
+      path: 'items.product',
+      select: 'name images price mrp stock isActive slug gstRate sku category',
+      populate: {
+        path: 'category',
+        select: 'name slug'
+      }
+    });
     res.json({ success: true, cart });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
