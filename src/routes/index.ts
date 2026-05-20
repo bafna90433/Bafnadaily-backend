@@ -754,7 +754,7 @@ ordersRouter.get('/', adminProtect, async (req: Request, res: Response) => {
 
 ordersRouter.put('/:id/status', adminProtect, async (req: Request, res: Response) => {
   try {
-    const { status, note, trackingNumber, courierName, packingDetails, shipProvider } = req.body;
+    const { status, note, trackingNumber, courierName, packingDetails, shipProvider, forceReship } = req.body;
     const order = await Order.findById(req.params.id).populate('user', 'name phone whatsapp') as any;
     if (!order) return res.status(404).json({ success: false, message: 'Not found' });
 
@@ -766,7 +766,14 @@ ordersRouter.put('/:id/status', adminProtect, async (req: Request, res: Response
       const provider = shipProvider || 'manual';
 
       // ── Delhivery auto AWB ──
-      if (provider === 'delhivery' && packingDetails?.length > 0 && !order.trackingNumber) {
+      // forceReship = true allows re-creating AWB when old pickup was cancelled
+      if (provider === 'delhivery' && packingDetails?.length > 0 && (!order.trackingNumber || forceReship)) {
+        // Clear old tracking if re-shipping
+        if (forceReship && order.trackingNumber) {
+          order.trackingNumber = '';
+          order.courierName = '';
+          if (order.wa) order.wa.trackingSent = false;
+        }
         try {
           const BOX_DIMS: Record<string, { l: number; b: number; h: number }> = {
             A28: { l: 47, b: 36, h: 25 }, A06: { l: 44.5, b: 35, h: 34.5 },
