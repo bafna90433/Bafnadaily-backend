@@ -805,7 +805,7 @@ ordersRouter.put('/:id/status', adminProtect, async (req: Request, res: Response
               pin: addr.pincode, city: addr.city, state: addr.state,
               country: 'India',
               phone: addr.phone || order.user?.phone || '9999999999',
-              order: order.orderNumber,
+              order: forceReship ? `${order.orderNumber}-R${Date.now().toString().slice(-4)}` : order.orderNumber,
               payment_mode: order.paymentMethod === 'cod' ? 'COD' : 'Prepaid',
               cod_amount: order.paymentMethod === 'cod' ? Math.max(0, order.total - (order.advanceAmount || 0)) : 0,
               products_desc: 'Products',
