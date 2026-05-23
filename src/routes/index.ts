@@ -1661,47 +1661,63 @@ adminRouter.get('/razorpay/payments', adminProtect, async (req: Request, res: Re
 
     const payments: any[] = rzResp.data?.items || [];
 
-    // Cross-reference orderNumbers from notes
-    const orderNumbers = [...new Set(
-      payments.map((p: any) => p.notes?.orderNumber || p.description || '').filter(Boolean)
-    )];
-    const orders = await Order.find({ orderNumber: { $in: orderNumbers } })
-      .select('orderNumber user total paymentMethod orderStatus')
+    // Match orders by paymentId (most accurate) OR notes.orderNumber
+    const paymentIds = payments.map((p: any) => p.id).filter(Boolean);
+    const noteOrderNums = payments.map((p: any) => p.notes?.orderNumber || '').filter(Boolean);
+
+    const orders = await Order.find({
+      $or: [
+        { paymentId: { $in: paymentIds } },
+        { orderNumber: { $in: noteOrderNums } },
+      ]
+    })
+      .select('orderNumber user total paymentMethod orderStatus paymentId paymentStatus')
       .populate('user', 'name phone') as any[];
-    const orderMap: Record<string, any> = {};
-    orders.forEach(o => { orderMap[o.orderNumber] = o; });
+
+    // Build maps for fast lookup
+    const byPayId: Record<string, any>  = {};
+    const byOrderNum: Record<string, any> = {};
+    orders.forEach(o => {
+      if (o.paymentId) byPayId[o.paymentId] = o;
+      if (o.orderNumber) byOrderNum[o.orderNumber] = o;
+    });
 
     const enriched = payments.map((p: any) => {
-      const orderNum = p.notes?.orderNumber || '';
-      const matchedOrder = orderMap[orderNum] || null;
+      const matchedOrder = byPayId[p.id] || byOrderNum[p.notes?.orderNumber || ''] || null;
+      const feeRs  = p.fee  ? p.fee  / 100 : 0;
+      const taxRs  = p.tax  ? p.tax  / 100 : 0;
+      const amtRs  = p.amount / 100;
       return {
-        id: p.id,
-        amount: p.amount / 100,
-        currency: p.currency,
-        status: p.status,
-        method: p.method,
-        email: p.email || '',
-        contact: p.contact || '',
-        description: p.description || '',
-        notes: p.notes || {},
-        bank: p.bank || '',
-        wallet: p.wallet || '',
-        vpa: p.vpa || '',
-        card_network: p.card?.network || '',
-        card_last4: p.card?.last4 || '',
+        id:                p.id,
+        amount:            amtRs,
+        fee:               feeRs,
+        tax:               taxRs,
+        net:               +(amtRs - feeRs - taxRs).toFixed(2),
+        currency:          p.currency,
+        status:            p.status,
+        method:            p.method,
+        email:             p.email || '',
+        contact:           p.contact || '',
+        description:       p.description || '',
+        notes:             p.notes || {},
+        bank:              p.bank || '',
+        wallet:            p.wallet || '',
+        vpa:               p.vpa || '',
+        card_network:      p.card?.network || '',
+        card_last4:        p.card?.last4   || '',
         error_description: p.error_description || '',
-        created_at: p.created_at,
-        // cross-referenced order
-        orderNumber: orderNum,
-        customerName: matchedOrder?.user?.name || p.notes?.customerName || '',
-        customerPhone: matchedOrder?.user?.phone || p.contact || '',
-        orderStatus: matchedOrder?.orderStatus || '',
-        orderId: matchedOrder?._id || '',
+        created_at:        p.created_at,
+        // cross-referenced from our DB
+        orderNumber:   matchedOrder?.orderNumber  || p.notes?.orderNumber || '',
+        orderId:       matchedOrder?._id?.toString() || '',
+        orderStatus:   matchedOrder?.orderStatus  || '',
+        paymentStatus: matchedOrder?.paymentStatus || '',
+        customerName:  matchedOrder?.user?.name   || '',
+        customerPhone: matchedOrder?.user?.phone  || p.contact?.replace(/^\+91/, '') || '',
       };
     });
 
-    const total = rzResp.data?.count || 0;
-    res.json({ success: true, payments: enriched, total });
+    res.json({ success: true, payments: enriched, total: rzResp.data?.count || 0 });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.response?.data?.error?.description || err.message });
   }
