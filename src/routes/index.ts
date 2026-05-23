@@ -754,7 +754,7 @@ ordersRouter.get('/', adminProtect, async (req: Request, res: Response) => {
 
 ordersRouter.put('/:id/status', adminProtect, async (req: Request, res: Response) => {
   try {
-    const { status, note, trackingNumber, courierName, packingDetails, shipProvider, forceReship } = req.body;
+    const { status, note, trackingNumber, courierName, packingDetails, shipProvider, forceReship, npCourierId } = req.body;
     const order = await Order.findById(req.params.id).populate('user', 'name phone whatsapp') as any;
     if (!order) return res.status(404).json({ success: false, message: 'Not found' });
 
@@ -961,31 +961,38 @@ ordersRouter.put('/:id/status', adminProtect, async (req: Request, res: Response
             order_items: orderItems,
           };
 
-          // ── Get courier list from NimbusPost serviceability API ──
+          // ── Set courier_id: use frontend-selected one, or auto-fetch from serviceability ──
           let sortedCouriers: any[] = [];
-          try {
-            const weightKg = totalWeightGrams / 1000;
-            const svcResp = await axios.get('https://api.nimbuspost.com/v1/courier/serviceability', {
-              params: {
-                pickup_pincode: String(np.pickupPincode || '641007'),
-                delivery_pincode: String(addr.pincode),
-                weight: weightKg.toFixed(2),
-                cod: order.paymentMethod === 'cod' ? 1 : 0,
-              },
-              headers: { Authorization: `Bearer ${npToken}` }
-            });
-            const couriers: any[] = svcResp.data?.data || svcResp.data?.result || [];
-            console.log('[NimbusPost] Available couriers:', couriers.map((c: any) => `${c.courier_name||c.name}(${c.courier_id||c.id})`).join(', '));
-            // Sort by rate (cheapest first)
-            sortedCouriers = [...couriers].sort((a: any, b: any) => (Number(a.rate || a.total_charges || 0) - Number(b.rate || b.total_charges || 0)));
-          } catch (svcErr: any) {
-            console.warn('[NimbusPost] Serviceability check failed:', svcErr.message);
+          if (npCourierId) {
+            // Frontend already selected a courier — use it directly
+            npPayload.courier_id = npCourierId;
+            console.log('[NimbusPost] Using frontend-selected courier_id:', npCourierId);
+          } else {
+            // Auto-fetch cheapest courier from serviceability API
+            try {
+              const weightKg = totalWeightGrams / 1000;
+              const svcResp = await axios.get('https://api.nimbuspost.com/v1/courier/serviceability', {
+                params: {
+                  pickup_pincode: String(np.pickupPincode || '641007'),
+                  delivery_pincode: String(addr.pincode),
+                  weight: weightKg.toFixed(2),
+                  cod: order.paymentMethod === 'cod' ? 1 : 0,
+                },
+                headers: { Authorization: `Bearer ${npToken}` }
+              });
+              const couriers: any[] = svcResp.data?.data || svcResp.data?.result || [];
+              console.log('[NimbusPost] Available couriers:', couriers.map((c: any) => `${c.courier_name||c.name}(${c.courier_id||c.id})`).join(', '));
+              sortedCouriers = [...couriers].sort((a: any, b: any) => (Number(a.rate || a.total_charges || 0) - Number(b.rate || b.total_charges || 0)));
+            } catch (svcErr: any) {
+              console.warn('[NimbusPost] Serviceability check failed:', svcErr.message);
+            }
           }
 
           // ── Try couriers one by one until AWB is created ──
           let npResp: any = null;
           let awbSuccess = false;
-          const couriersToTry = sortedCouriers.length > 0 ? sortedCouriers : [null]; // null = no courier_id (autoship)
+          // If courier already set (from frontend), only try that one; else try sorted list
+          const couriersToTry = npCourierId ? [null] : (sortedCouriers.length > 0 ? sortedCouriers : [null]);
 
           for (const courier of couriersToTry) {
             if (courier) {
@@ -1091,6 +1098,47 @@ ordersRouter.put('/:id/status', adminProtect, async (req: Request, res: Response
 });
 
 // ── GET /api/orders/:id/tracking  → Live tracking from Delhivery ─────────────
+// ── NimbusPost: Get available couriers for an order ──────────────────────────
+ordersRouter.get('/:id/nimbuspost-couriers', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const order = await Order.findById(req.params.id).populate('user', 'name phone').lean() as any;
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+
+    const s = await SiteSettings.findOne();
+    const np = s?.nimbuspost;
+    if (!np?.email || !np?.password) return res.status(400).json({ success: false, message: 'NimbusPost not configured' });
+
+    // Get/refresh token
+    let npToken = np.token;
+    const tokenValid = npToken && np.tokenExpiry && new Date() < new Date(np.tokenExpiry);
+    if (!tokenValid) {
+      const loginResp = await axios.post('https://api.nimbuspost.com/v1/users/login', {
+        email: np.email, password: np.password,
+      });
+      if (!loginResp.data?.status) return res.status(400).json({ success: false, message: 'NimbusPost login failed' });
+      npToken = loginResp.data.data;
+      await SiteSettings.findOneAndUpdate({}, { 'nimbuspost.token': npToken, 'nimbuspost.tokenExpiry': new Date(Date.now() + 23 * 60 * 60 * 1000) });
+    }
+
+    const weightKg = parseFloat(String(req.query.weight || '0.5'));
+    const deliveryPincode = String(order.shippingAddress?.pincode || '');
+    const pickupPincode = String(np.pickupPincode || '641007');
+    const isCod = order.paymentMethod === 'cod' ? 1 : 0;
+
+    const svcResp = await axios.get('https://api.nimbuspost.com/v1/courier/serviceability', {
+      params: { pickup_pincode: pickupPincode, delivery_pincode: deliveryPincode, weight: weightKg.toFixed(2), cod: isCod },
+      headers: { Authorization: `Bearer ${npToken}` }
+    });
+
+    const couriers: any[] = svcResp.data?.data || svcResp.data?.result || [];
+    // Sort by rate
+    couriers.sort((a: any, b: any) => Number(a.rate || a.total_charges || 0) - Number(b.rate || b.total_charges || 0));
+    res.json({ success: true, couriers });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 ordersRouter.get('/:id/tracking', adminProtect, async (req: Request, res: Response) => {
   try {
     const order = await Order.findById(req.params.id).select('trackingNumber courierName orderNumber').lean() as any;
