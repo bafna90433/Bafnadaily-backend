@@ -898,53 +898,24 @@ ordersRouter.put('/:id/status', adminProtect, async (req: Request, res: Response
           // ── Step 3: Build pickup object from Settings ──
           const np = s.nimbuspost;
           const warehouseName = np.pickupWarehouseName || 'Primary';
-          // Fetch pickup warehouse details from NimbusPost
-          let pickupObj: any = { warehouse_name: warehouseName };
-          try {
-            const whResp = await axios.get('https://api.nimbuspost.com/v1/pickup-addresses', {
-              headers: { Authorization: `Bearer ${npToken}` }
-            });
-            console.log('[NimbusPost] Warehouses:', JSON.stringify(whResp.data));
-            const wList: any[] = whResp.data?.data || whResp.data?.result || [];
-            const matched = wList.find((w: any) =>
-              (w.warehouse_name || w.name || '').toLowerCase().trim() === warehouseName.toLowerCase().trim()
-            ) || wList[0];
-            if (matched) {
-              console.log('[NimbusPost] Matched warehouse:', JSON.stringify(matched));
-              pickupObj = {
-                warehouse_name: matched.warehouse_name || matched.name || warehouseName,
-                contact_name: matched.contact_person || matched.contact_name || matched.name || np.pickupContactName || 'Admin',
-                phone: String(matched.phone || matched.mobile || matched.contact_no || np.pickupPhone || ''),
-                address: matched.address || matched.address_1 || matched.street || np.pickupAddress || '',
-                city: matched.city || np.pickupCity || '',
-                state: matched.state || np.pickupState || '',
-                pincode: String(matched.pincode || matched.pin_code || matched.zip || np.pickupPincode || ''),
-              };
-            } else {
-              // Fallback: use settings fields
-              pickupObj = {
-                warehouse_name: warehouseName,
-                contact_name: np.pickupContactName || 'Admin',
-                phone: String(np.pickupPhone || ''),
-                address: np.pickupAddress || '',
-                city: np.pickupCity || '',
-                state: np.pickupState || '',
-                pincode: String(np.pickupPincode || ''),
-              };
-            }
-          } catch (whErr: any) {
-            console.warn('[NimbusPost] Warehouse fetch failed:', whErr.message);
-            pickupObj = {
-              warehouse_name: warehouseName,
-              contact_name: np.pickupContactName || 'Admin',
-              phone: String(np.pickupPhone || ''),
-              address: np.pickupAddress || '',
-              city: np.pickupCity || '',
-              state: np.pickupState || '',
-              pincode: String(np.pickupPincode || ''),
-            };
-          }
-          console.log('[NimbusPost] Final pickupObj:', JSON.stringify(pickupObj));
+          const contactName = np.pickupContactName || 'Admin';
+          const contactPhone = String(np.pickupPhone || '9999999999');
+          const pickupAddress = np.pickupAddress || '';
+          const pickupCity = np.pickupCity || '';
+          const pickupState = np.pickupState || '';
+          const pickupPincode = String(np.pickupPincode || '');
+
+          // NimbusPost pickup object — use 'name' (not 'contact_name')
+          const pickupObj: any = {
+            warehouse_name: warehouseName,
+            name: contactName,           // NimbusPost expects 'name' not 'contact_name'
+            contact_name: contactName,   // keep both for safety
+            phone: contactPhone,
+            address: pickupAddress,
+            city: pickupCity,
+            state: pickupState,
+            pincode: pickupPincode,
+          };
 
           // ── Step 4: Build order_items ──
           const orderItems = (order.items || []).map((it: any) => ({
