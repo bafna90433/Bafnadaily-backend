@@ -110,6 +110,9 @@ router.put('/', adminProtect, async (req: Request, res: Response) => {
     let s = await SiteSettings.findOne();
     if (!s) s = await SiteSettings.create({});
     Object.assign(s, req.body);
+    // Nested subdocuments ko Mongoose track nahi karta automatically
+    const nestedKeys = ['razorpay', 'shiprocket', 'nimbuspost', 'moqPolicy', 'homepageSections'];
+    nestedKeys.forEach(k => { if (req.body[k] !== undefined) s!.markModified(k); });
     await s.save();
     res.json({ success: true, settings: s, message: 'Settings saved!' });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }

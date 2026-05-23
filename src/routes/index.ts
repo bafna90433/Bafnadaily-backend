@@ -897,6 +897,14 @@ ordersRouter.put('/:id/status', adminProtect, async (req: Request, res: Response
 
           // ── Step 3: Build pickup object from Settings ──
           const np = s.nimbuspost;
+          console.log('[NimbusPost] nimbuspost settings from DB:', JSON.stringify({
+            pickupContactName: np.pickupContactName,
+            pickupAddress: np.pickupAddress,
+            pickupCity: np.pickupCity,
+            pickupState: np.pickupState,
+            pickupPincode: np.pickupPincode,
+            pickupPhone: np.pickupPhone,
+          }));
           const pickupObj: any = {
             warehouse_name: np.pickupWarehouseName || 'Primary',
             contact_name: np.pickupContactName || 'Admin',
@@ -906,6 +914,7 @@ ordersRouter.put('/:id/status', adminProtect, async (req: Request, res: Response
             pincode: String(np.pickupPincode || ''),
             phone: String(np.pickupPhone || ''),
           };
+          console.log('[NimbusPost] pickupObj being sent:', JSON.stringify(pickupObj));
 
           // ── Step 4: Build order_items ──
           const orderItems = (order.items || []).map((it: any) => ({
