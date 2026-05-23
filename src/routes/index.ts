@@ -895,32 +895,17 @@ ordersRouter.put('/:id/status', adminProtect, async (req: Request, res: Response
           const orderRef = forceReship ? `${order.orderNumber}-R${Date.now().toString().slice(-4)}` : order.orderNumber;
           const paymentTypeStr = order.paymentMethod === 'cod' ? 'cod' : 'prepaid';
 
-          // ── Step 3: Fetch pickup warehouse details from NimbusPost ──
-          let pickupObj: any = { warehouse_name: s.nimbuspost.pickupWarehouseName || 'Primary' };
-          try {
-            const warehouseResp = await axios.get('https://api.nimbuspost.com/v1/pickup-addresses', {
-              headers: { Authorization: `Bearer ${npToken}` }
-            });
-            const warehouses: any[] = warehouseResp.data?.data || [];
-            const warehouseName = (s.nimbuspost.pickupWarehouseName || 'Primary').toLowerCase().trim();
-            const matched = warehouses.find((w: any) =>
-              (w.warehouse_name || w.name || '').toLowerCase().trim() === warehouseName
-            ) || warehouses[0];
-            if (matched) {
-              pickupObj = {
-                warehouse_name: matched.warehouse_name || matched.name,
-                contact_name: matched.contact_person || matched.contact_name || matched.name || 'Admin',
-                address: matched.address || matched.address_1 || '',
-                address_2: matched.address_2 || '',
-                city: matched.city || '',
-                state: matched.state || '',
-                pincode: String(matched.pincode || matched.pin_code || ''),
-                phone: String(matched.phone || matched.mobile || ''),
-              };
-            }
-          } catch (whErr: any) {
-            console.warn('[NimbusPost] Could not fetch warehouses:', whErr.message);
-          }
+          // ── Step 3: Build pickup object from Settings ──
+          const np = s.nimbuspost;
+          const pickupObj: any = {
+            warehouse_name: np.pickupWarehouseName || 'Primary',
+            contact_name: np.pickupContactName || 'Admin',
+            address: np.pickupAddress || '',
+            city: np.pickupCity || '',
+            state: np.pickupState || '',
+            pincode: String(np.pickupPincode || ''),
+            phone: String(np.pickupPhone || ''),
+          };
 
           // ── Step 4: Build order_items ──
           const orderItems = (order.items || []).map((it: any) => ({

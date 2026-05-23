@@ -52,6 +52,12 @@ export interface ISiteSettings extends Document {
     email: string;
     password: string;
     pickupWarehouseName: string;
+    pickupContactName: string;
+    pickupAddress: string;
+    pickupCity: string;
+    pickupState: string;
+    pickupPincode: string;
+    pickupPhone: string;
     token: string;
     tokenExpiry: Date | null;
   };
@@ -139,6 +145,12 @@ const siteSettingsSchema = new Schema<ISiteSettings>(
       email: { type: String, default: '' },
       password: { type: String, default: '' },
       pickupWarehouseName: { type: String, default: 'Primary' },
+      pickupContactName: { type: String, default: '' },
+      pickupAddress: { type: String, default: '' },
+      pickupCity: { type: String, default: '' },
+      pickupState: { type: String, default: '' },
+      pickupPincode: { type: String, default: '' },
+      pickupPhone: { type: String, default: '' },
       token: { type: String, default: '' },
       tokenExpiry: { type: Date, default: null },
     },
