@@ -946,7 +946,7 @@ ordersRouter.put('/:id/status', adminProtect, async (req: Request, res: Response
             },
             pickup: pickupObj,
             order_items: orderItems,
-            courier_id: 0,
+            // courier_id omitted — NimbusPost auto-selects best courier
           };
 
           const npResp = await axios.post(
