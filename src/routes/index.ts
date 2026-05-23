@@ -829,7 +829,9 @@ ordersRouter.put('/:id/status', adminProtect, async (req: Request, res: Response
             order.courierName = 'Delhivery';
             order.packingDetails = packingDetails;
           } else {
-            return res.status(400).json({ success: false, message: 'Delhivery Error: ' + JSON.stringify(delvResp.data?.rmk || delvResp.data) });
+            const errMsg = delvResp.data?.packages?.[0]?.remarks || delvResp.data?.rmk || JSON.stringify(delvResp.data);
+            console.error('[Delhivery Error] Full response:', JSON.stringify(delvResp.data, null, 2));
+            return res.status(400).json({ success: false, message: 'Delhivery Error: ' + errMsg });
           }
         } catch (apiErr: any) {
           return res.status(500).json({ success: false, message: 'Delhivery API failed: ' + apiErr.message });
@@ -1632,6 +1634,77 @@ dealsRouter.delete('/:id', adminProtect, async (req: Request, res: Response) => 
     await DealOfDay.findByIdAndDelete(req.params.id);
     res.json({ success: true, message: 'Deal deleted' });
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// ─── GET /admin/razorpay/payments ─────────────────────────────────────────────
+adminRouter.get('/razorpay/payments', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const s = await SiteSettings.findOne();
+    if (!s?.razorpay?.keyId || !s?.razorpay?.keySecret) {
+      return res.status(400).json({ success: false, message: 'Razorpay not configured in Settings' });
+    }
+    const auth = Buffer.from(`${s.razorpay.keyId}:${s.razorpay.keySecret}`).toString('base64');
+
+    const count = Math.min(Number(req.query.count) || 25, 100);
+    const skip  = Number(req.query.skip) || 0;
+    const from  = req.query.from ? Number(req.query.from) : undefined;
+    const to    = req.query.to   ? Number(req.query.to)   : undefined;
+
+    const params: any = { count, skip };
+    if (from) params.from = from;
+    if (to)   params.to   = to;
+
+    const rzResp = await axios.get('https://api.razorpay.com/v1/payments', {
+      params,
+      headers: { Authorization: `Basic ${auth}` }
+    });
+
+    const payments: any[] = rzResp.data?.items || [];
+
+    // Cross-reference orderNumbers from notes
+    const orderNumbers = [...new Set(
+      payments.map((p: any) => p.notes?.orderNumber || p.description || '').filter(Boolean)
+    )];
+    const orders = await Order.find({ orderNumber: { $in: orderNumbers } })
+      .select('orderNumber user total paymentMethod orderStatus')
+      .populate('user', 'name phone') as any[];
+    const orderMap: Record<string, any> = {};
+    orders.forEach(o => { orderMap[o.orderNumber] = o; });
+
+    const enriched = payments.map((p: any) => {
+      const orderNum = p.notes?.orderNumber || '';
+      const matchedOrder = orderMap[orderNum] || null;
+      return {
+        id: p.id,
+        amount: p.amount / 100,
+        currency: p.currency,
+        status: p.status,
+        method: p.method,
+        email: p.email || '',
+        contact: p.contact || '',
+        description: p.description || '',
+        notes: p.notes || {},
+        bank: p.bank || '',
+        wallet: p.wallet || '',
+        vpa: p.vpa || '',
+        card_network: p.card?.network || '',
+        card_last4: p.card?.last4 || '',
+        error_description: p.error_description || '',
+        created_at: p.created_at,
+        // cross-referenced order
+        orderNumber: orderNum,
+        customerName: matchedOrder?.user?.name || p.notes?.customerName || '',
+        customerPhone: matchedOrder?.user?.phone || p.contact || '',
+        orderStatus: matchedOrder?.orderStatus || '',
+        orderId: matchedOrder?._id || '',
+      };
+    });
+
+    const total = rzResp.data?.count || 0;
+    res.json({ success: true, payments: enriched, total });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.response?.data?.error?.description || err.message });
+  }
 });
 
 export default adminRouter;
