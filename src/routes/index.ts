@@ -926,7 +926,20 @@ ordersRouter.put('/:id/status', adminProtect, async (req: Request, res: Response
           }));
 
           // ── Step 5: Create shipment ──
-          const npPayload = {
+          const npPayload: {
+            order_number: any;
+            payment_type: string;
+            package_weight: number;
+            package_length: number;
+            package_breadth: number;
+            package_height: number;
+            order_amount: number;
+            collectable_amount: number;
+            courier_id?: number | string;
+            consignee: any;
+            pickup: any;
+            order_items: any[];
+          } = {
             order_number: orderRef,
             payment_type: paymentTypeStr,
             package_weight: Math.max(10, totalWeightGrams),
