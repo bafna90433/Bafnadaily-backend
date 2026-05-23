@@ -1108,16 +1108,19 @@ ordersRouter.get('/:id/nimbuspost-couriers', adminProtect, async (req: Request, 
     const np = s?.nimbuspost;
     if (!np?.email || !np?.password) return res.status(400).json({ success: false, message: 'NimbusPost not configured' });
 
-    // Get/refresh token
-    let npToken = np.token;
-    const tokenValid = npToken && np.tokenExpiry && new Date() < new Date(np.tokenExpiry);
-    if (!tokenValid) {
+    // Always get a fresh token for serviceability check
+    let npToken: string;
+    try {
       const loginResp = await axios.post('https://api.nimbuspost.com/v1/users/login', {
         email: np.email, password: np.password,
       });
-      if (!loginResp.data?.status) return res.status(400).json({ success: false, message: 'NimbusPost login failed' });
+      if (!loginResp.data?.status) {
+        return res.status(400).json({ success: false, message: 'NimbusPost login failed: ' + JSON.stringify(loginResp.data) });
+      }
       npToken = loginResp.data.data;
       await SiteSettings.findOneAndUpdate({}, { 'nimbuspost.token': npToken, 'nimbuspost.tokenExpiry': new Date(Date.now() + 23 * 60 * 60 * 1000) });
+    } catch (loginErr: any) {
+      return res.status(400).json({ success: false, message: 'NimbusPost login error: ' + loginErr.message });
     }
 
     const weightKg = parseFloat(String(req.query.weight || '0.5'));
@@ -1125,15 +1128,18 @@ ordersRouter.get('/:id/nimbuspost-couriers', adminProtect, async (req: Request, 
     const pickupPincode = String(np.pickupPincode || '641007');
     const isCod = order.paymentMethod === 'cod' ? 1 : 0;
 
-    const svcResp = await axios.get('https://api.nimbuspost.com/v1/courier/serviceability', {
-      params: { pickup_pincode: pickupPincode, delivery_pincode: deliveryPincode, weight: weightKg.toFixed(2), cod: isCod },
-      headers: { Authorization: `Bearer ${npToken}` }
-    });
-
-    const couriers: any[] = svcResp.data?.data || svcResp.data?.result || [];
-    // Sort by rate
-    couriers.sort((a: any, b: any) => Number(a.rate || a.total_charges || 0) - Number(b.rate || b.total_charges || 0));
-    res.json({ success: true, couriers });
+    try {
+      const svcResp = await axios.get('https://api.nimbuspost.com/v1/courier/serviceability', {
+        params: { pickup_pincode: pickupPincode, delivery_pincode: deliveryPincode, weight: weightKg.toFixed(2), cod: isCod },
+        headers: { Authorization: `Bearer ${npToken}` }
+      });
+      const couriers: any[] = svcResp.data?.data || svcResp.data?.result || [];
+      couriers.sort((a: any, b: any) => Number(a.rate || a.total_charges || 0) - Number(b.rate || b.total_charges || 0));
+      res.json({ success: true, couriers, rawResponse: svcResp.data });
+    } catch (svcErr: any) {
+      const svcMsg = svcErr.response?.data?.message || svcErr.message;
+      res.status(400).json({ success: false, message: 'Serviceability check failed: ' + svcMsg, rawError: svcErr.response?.data });
+    }
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
   }
