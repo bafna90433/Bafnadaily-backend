@@ -946,8 +946,31 @@ ordersRouter.put('/:id/status', adminProtect, async (req: Request, res: Response
             },
             pickup: pickupObj,
             order_items: orderItems,
-            // courier_id omitted — NimbusPost auto-selects best courier
           };
+
+          // ── Get best courier_id from NimbusPost serviceability API ──
+          try {
+            const weightKg = totalWeightGrams / 1000;
+            const svcResp = await axios.get('https://api.nimbuspost.com/v1/courier/serviceability', {
+              params: {
+                pickup_pincode: String(np.pickupPincode || '641007'),
+                delivery_pincode: String(addr.pincode),
+                weight: weightKg.toFixed(2),
+                cod: order.paymentMethod === 'cod' ? 1 : 0,
+              },
+              headers: { Authorization: `Bearer ${npToken}` }
+            });
+            const couriers: any[] = svcResp.data?.data || svcResp.data?.result || [];
+            if (couriers.length > 0) {
+              // Sort by rate (cheapest first)
+              couriers.sort((a: any, b: any) => (Number(a.rate || a.total_charges || 0) - Number(b.rate || b.total_charges || 0)));
+              const best = couriers[0];
+              npPayload.courier_id = best.courier_id || best.id || best.courier_code;
+              console.log('[NimbusPost] Best courier:', best.courier_name || best.name, 'ID:', npPayload.courier_id);
+            }
+          } catch (svcErr: any) {
+            console.warn('[NimbusPost] Serviceability check failed:', svcErr.message);
+          }
 
           const npResp = await axios.post(
             'https://api.nimbuspost.com/v1/shipments',
