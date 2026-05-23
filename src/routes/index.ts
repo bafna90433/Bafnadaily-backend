@@ -569,7 +569,7 @@ export const ordersRouter = express.Router();
 
 ordersRouter.post('/', protect, async (req: AuthRequest, res: Response) => {
   try {
-    const { items, shippingAddress, paymentMethod, couponCode, giftWrapping, giftMessage, notes, paymentId, paymentStatus, advanceAmount, gstin } = req.body;
+    const { items, shippingAddress, paymentMethod, couponCode, giftWrapping, giftMessage, notes, paymentId, rzOrderId, paymentStatus, advanceAmount, gstin } = req.body;
     let subtotal = 0;
     const orderItems: any[] = [];
     for (const item of items) {
@@ -601,7 +601,7 @@ ordersRouter.post('/', protect, async (req: AuthRequest, res: Response) => {
       user: req.user._id, items: orderItems, shippingAddress, paymentMethod, couponCode,
       giftWrapping, giftMessage, notes, subtotal, discount, shippingCharge, total,
       advanceAmount: advanceAmount || 0, gstin: gstin || '',
-      paymentId, paymentStatus: paymentId ? 'paid' : 'pending',
+      paymentId, rzOrderId: rzOrderId || '', paymentStatus: paymentId ? 'paid' : 'pending',
       orderStatus: 'confirmed',
       statusHistory: [{ status: 'confirmed', note: 'Order placed', updatedAt: new Date() }],
     });
@@ -1661,33 +1661,46 @@ adminRouter.get('/razorpay/payments', adminProtect, async (req: Request, res: Re
 
     const payments: any[] = rzResp.data?.items || [];
 
-    // Match orders by paymentId (most accurate) OR notes.orderNumber
-    const paymentIds = payments.map((p: any) => p.id).filter(Boolean);
+    // Match by: paymentId (pay_xxx) OR rzOrderId (order_xxx from Razorpay) OR notes.orderNumber
+    const paymentIds  = payments.map((p: any) => p.id).filter(Boolean);
+    const rzOrderIds  = payments.map((p: any) => p.order_id || '').filter(Boolean);
     const noteOrderNums = payments.map((p: any) => p.notes?.orderNumber || '').filter(Boolean);
 
     const orders = await Order.find({
       $or: [
-        { paymentId: { $in: paymentIds } },
-        { orderNumber: { $in: noteOrderNums } },
+        { paymentId:  { $in: paymentIds } },
+        { rzOrderId:  { $in: rzOrderIds } },
+        { orderNumber:{ $in: noteOrderNums } },
       ]
     })
-      .select('orderNumber user total paymentMethod orderStatus paymentId paymentStatus')
+      .select('orderNumber user total paymentMethod orderStatus paymentId rzOrderId paymentStatus')
       .populate('user', 'name phone') as any[];
 
     // Build maps for fast lookup
-    const byPayId: Record<string, any>  = {};
+    const byPayId:    Record<string, any> = {};
+    const byRzOrdId:  Record<string, any> = {};
     const byOrderNum: Record<string, any> = {};
     orders.forEach(o => {
-      if (o.paymentId) byPayId[o.paymentId] = o;
+      if (o.paymentId)   byPayId[o.paymentId]     = o;
+      if (o.rzOrderId)   byRzOrdId[o.rzOrderId]   = o;
       if (o.orderNumber) byOrderNum[o.orderNumber] = o;
     });
 
-    const enriched = payments.map((p: any) => {
-      const matchedOrder = byPayId[p.id] || byOrderNum[p.notes?.orderNumber || ''] || null;
-      const feeRs  = p.fee  ? p.fee  / 100 : 0;
-      const taxRs  = p.tax  ? p.tax  / 100 : 0;
-      const amtRs  = p.amount / 100;
-      return {
+    const enriched: any[] = [];
+    for (const p of payments) {
+      const matchedOrder =
+        byPayId[p.id] ||
+        byRzOrdId[p.order_id || ''] ||
+        byOrderNum[p.notes?.orderNumber || ''] ||
+        null;
+
+      // Skip payments that don't belong to this site
+      if (!matchedOrder) continue;
+
+      const feeRs = p.fee  ? p.fee  / 100 : 0;
+      const taxRs = p.tax  ? p.tax  / 100 : 0;
+      const amtRs = p.amount / 100;
+      enriched.push({
         id:                p.id,
         amount:            amtRs,
         fee:               feeRs,
@@ -1707,17 +1720,16 @@ adminRouter.get('/razorpay/payments', adminProtect, async (req: Request, res: Re
         card_last4:        p.card?.last4   || '',
         error_description: p.error_description || '',
         created_at:        p.created_at,
-        // cross-referenced from our DB
-        orderNumber:   matchedOrder?.orderNumber  || p.notes?.orderNumber || '',
-        orderId:       matchedOrder?._id?.toString() || '',
-        orderStatus:   matchedOrder?.orderStatus  || '',
-        paymentStatus: matchedOrder?.paymentStatus || '',
-        customerName:  matchedOrder?.user?.name   || '',
-        customerPhone: matchedOrder?.user?.phone  || p.contact?.replace(/^\+91/, '') || '',
-      };
-    });
+        orderNumber:   matchedOrder.orderNumber  || '',
+        orderId:       matchedOrder._id?.toString() || '',
+        orderStatus:   matchedOrder.orderStatus  || '',
+        paymentStatus: matchedOrder.paymentStatus || '',
+        customerName:  matchedOrder.user?.name   || '',
+        customerPhone: matchedOrder.user?.phone  || p.contact?.replace(/^\+91/, '') || '',
+      });
+    }
 
-    res.json({ success: true, payments: enriched, total: rzResp.data?.count || 0 });
+    res.json({ success: true, payments: enriched, total: enriched.length });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.response?.data?.error?.description || err.message });
   }

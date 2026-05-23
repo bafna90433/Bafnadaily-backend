@@ -10,6 +10,7 @@ export interface IOrder extends Document {
   paymentMethod: 'cod' | 'online' | 'upi';
   paymentStatus: 'pending' | 'paid' | 'failed' | 'refunded';
   paymentId?: string;
+  rzOrderId?: string;  // Razorpay order_id (order_xxx) — used to filter this site's payments
   orderStatus: 'placed' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'returned';
   statusHistory: { status: string; note?: string; updatedAt: Date }[];
   subtotal: number;
@@ -40,6 +41,7 @@ const orderSchema = new Schema<IOrder>(
     paymentMethod: { type: String, enum: ['cod', 'online', 'upi'], default: 'cod' },
     paymentStatus: { type: String, enum: ['pending', 'paid', 'failed', 'refunded'], default: 'pending' },
     paymentId: String,
+    rzOrderId: { type: String, default: '' },
     orderStatus: { type: String, enum: ['placed','confirmed','processing','shipped','delivered','cancelled','returned'], default: 'placed' },
     statusHistory: [{ status: String, note: String, updatedAt: { type: Date, default: Date.now } }],
     subtotal: Number,
