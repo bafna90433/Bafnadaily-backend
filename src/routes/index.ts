@@ -838,6 +838,107 @@ ordersRouter.put('/:id/status', adminProtect, async (req: Request, res: Response
         }
       }
 
+      // ── NimbusPost auto AWB ──
+      if (provider === 'nimbuspost' && packingDetails?.length > 0 && (!order.trackingNumber || forceReship)) {
+        if (forceReship && order.trackingNumber) {
+          order.trackingNumber = '';
+          order.courierName = '';
+          if (order.wa) order.wa.trackingSent = false;
+        }
+        try {
+          const s = await SiteSettings.findOne();
+          if (!s?.nimbuspost?.email || !s?.nimbuspost?.password) {
+            return res.status(400).json({ success: false, message: 'NimbusPost credentials not configured in Settings' });
+          }
+
+          // ── Step 1: Get/refresh JWT token ──
+          let npToken = s.nimbuspost.token;
+          const tokenValid = npToken && s.nimbuspost.tokenExpiry && new Date() < new Date(s.nimbuspost.tokenExpiry);
+          if (!tokenValid) {
+            const loginResp = await axios.post('https://api.nimbuspost.com/v1/users/login', {
+              email: s.nimbuspost.email,
+              password: s.nimbuspost.password,
+            });
+            if (!loginResp.data?.status) {
+              return res.status(400).json({ success: false, message: 'NimbusPost login failed: ' + JSON.stringify(loginResp.data) });
+            }
+            npToken = loginResp.data.data;
+            // Cache token for 23 hours
+            s.nimbuspost.token = npToken;
+            s.nimbuspost.tokenExpiry = new Date(Date.now() + 23 * 60 * 60 * 1000) as any;
+            await s.save();
+          }
+
+          // ── Step 2: Calculate weight & dims from packing details ──
+          const BOX_DIMS: Record<string, { l: number; b: number; h: number }> = {
+            A28: { l: 47, b: 36, h: 25 }, A06: { l: 44.5, b: 35, h: 34.5 },
+            A08: { l: 47, b: 35.5, h: 47 }, A31: { l: 89, b: 48, h: 40 },
+            A18: { l: 44, b: 20, h: 45 }, CVR: { l: 28, b: 20, h: 2 },
+          };
+          let totalWeightGrams = 0;
+          let dims = BOX_DIMS['A28'];
+          packingDetails.forEach((box: any) => {
+            if (box.boxType === 'CVR' && box.customWeightKg) {
+              totalWeightGrams += box.customWeightKg * 1000 * (box.quantity || 1);
+            } else {
+              totalWeightGrams += (Number(box.totalWeight) || 0) * 1000;
+            }
+            if (box.boxType === 'CVR' && box.customDims) {
+              dims = box.customDims;
+            } else if (BOX_DIMS[box.boxType]) {
+              dims = BOX_DIMS[box.boxType];
+            }
+          });
+
+          const addr = order.shippingAddress;
+          const collectAmt = order.paymentMethod === 'cod' ? Math.max(0, order.total - (order.advanceAmount || 0)) : 0;
+          const orderRef = forceReship ? `${order.orderNumber}-R${Date.now().toString().slice(-4)}` : order.orderNumber;
+
+          // ── Step 3: Create shipment ──
+          const npPayload = {
+            order_number: orderRef,
+            payment_type: order.paymentMethod === 'cod' ? 2 : 1,  // 1=prepaid, 2=COD
+            package_weight: Math.max(10, totalWeightGrams),
+            package_length: dims.l,
+            package_breadth: dims.b,
+            package_height: dims.h,
+            order_amount: order.total,
+            collectable_amount: collectAmt,
+            consignee: {
+              name: addr.name || 'Customer',
+              address: addr.addressLine1 + (addr.addressLine2 ? ', ' + addr.addressLine2 : ''),
+              address_2: '',
+              city: addr.city,
+              state: addr.state,
+              pincode: addr.pincode,
+              phone: addr.phone || order.user?.phone || '9999999999',
+            },
+            pickup: {
+              warehouse_name: s.nimbuspost.pickupWarehouseName || 'Primary',
+            },
+            courier_id: 0,  // 0 = auto-select cheapest available
+          };
+
+          const npResp = await axios.post(
+            'https://api.nimbuspost.com/v1/shipments',
+            npPayload,
+            { headers: { Authorization: `Bearer ${npToken}`, 'Content-Type': 'application/json' } }
+          );
+
+          if (npResp.data?.status && npResp.data?.data?.awb_number) {
+            order.trackingNumber = npResp.data.data.awb_number;
+            order.courierName = npResp.data.data.courier_name || 'NimbusPost';
+            order.packingDetails = packingDetails;
+          } else {
+            const errMsg = npResp.data?.message || JSON.stringify(npResp.data);
+            console.error('[NimbusPost Error]', JSON.stringify(npResp.data, null, 2));
+            return res.status(400).json({ success: false, message: 'NimbusPost Error: ' + errMsg });
+          }
+        } catch (apiErr: any) {
+          return res.status(500).json({ success: false, message: 'NimbusPost API failed: ' + apiErr.message });
+        }
+      }
+
       // ── Shiprocket manual tracking ──
       if (provider === 'shiprocket' && trackingNumber) {
         order.trackingNumber = trackingNumber;

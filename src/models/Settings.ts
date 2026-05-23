@@ -47,6 +47,14 @@ export interface ISiteSettings extends Document {
     token: string;
     tokenExpiry: Date | null;
   };
+  nimbuspost: {
+    enabled: boolean;
+    email: string;
+    password: string;
+    pickupWarehouseName: string;
+    token: string;
+    tokenExpiry: Date | null;
+  };
   freeShippingAbove: number;
   standardShippingCharge: number;
   giftWrapCharge: number;
@@ -123,6 +131,14 @@ const siteSettingsSchema = new Schema<ISiteSettings>(
       email: { type: String, default: '' },
       password: { type: String, default: '' },
       channelId: { type: String, default: '' },
+      token: { type: String, default: '' },
+      tokenExpiry: { type: Date, default: null },
+    },
+    nimbuspost: {
+      enabled: { type: Boolean, default: false },
+      email: { type: String, default: '' },
+      password: { type: String, default: '' },
+      pickupWarehouseName: { type: String, default: 'Primary' },
       token: { type: String, default: '' },
       tokenExpiry: { type: Date, default: null },
     },
