@@ -961,7 +961,8 @@ ordersRouter.put('/:id/status', adminProtect, async (req: Request, res: Response
             order_items: orderItems,
           };
 
-          // ── Get best courier_id from NimbusPost serviceability API ──
+          // ── Get courier list from NimbusPost serviceability API ──
+          let sortedCouriers: any[] = [];
           try {
             const weightKg = totalWeightGrams / 1000;
             const svcResp = await axios.get('https://api.nimbuspost.com/v1/courier/serviceability', {
@@ -974,30 +975,53 @@ ordersRouter.put('/:id/status', adminProtect, async (req: Request, res: Response
               headers: { Authorization: `Bearer ${npToken}` }
             });
             const couriers: any[] = svcResp.data?.data || svcResp.data?.result || [];
-            if (couriers.length > 0) {
-              // Sort by rate (cheapest first)
-              couriers.sort((a: any, b: any) => (Number(a.rate || a.total_charges || 0) - Number(b.rate || b.total_charges || 0)));
-              const best = couriers[0];
-              npPayload.courier_id = best.courier_id || best.id || best.courier_code;
-              console.log('[NimbusPost] Best courier:', best.courier_name || best.name, 'ID:', npPayload.courier_id);
-            }
+            console.log('[NimbusPost] Available couriers:', couriers.map((c: any) => `${c.courier_name||c.name}(${c.courier_id||c.id})`).join(', '));
+            // Sort by rate (cheapest first)
+            sortedCouriers = [...couriers].sort((a: any, b: any) => (Number(a.rate || a.total_charges || 0) - Number(b.rate || b.total_charges || 0)));
           } catch (svcErr: any) {
             console.warn('[NimbusPost] Serviceability check failed:', svcErr.message);
           }
 
-          const npResp = await axios.post(
-            'https://api.nimbuspost.com/v1/shipments',
-            npPayload,
-            { headers: { Authorization: `Bearer ${npToken}`, 'Content-Type': 'application/json' } }
-          );
+          // ── Try couriers one by one until AWB is created ──
+          let npResp: any = null;
+          let awbSuccess = false;
+          const couriersToTry = sortedCouriers.length > 0 ? sortedCouriers : [null]; // null = no courier_id (autoship)
 
-          if (npResp.data?.status && npResp.data?.data?.awb_number) {
+          for (const courier of couriersToTry) {
+            if (courier) {
+              npPayload.courier_id = courier.courier_id || courier.id || courier.courier_code;
+              console.log('[NimbusPost] Trying courier:', courier.courier_name || courier.name, 'ID:', npPayload.courier_id);
+            } else {
+              delete (npPayload as any).courier_id;
+            }
+            try {
+              npResp = await axios.post(
+                'https://api.nimbuspost.com/v1/shipments',
+                npPayload,
+                { headers: { Authorization: `Bearer ${npToken}`, 'Content-Type': 'application/json' } }
+              );
+              if (npResp.data?.status && npResp.data?.data?.awb_number) {
+                awbSuccess = true;
+                break; // success!
+              }
+              const msg: string = npResp.data?.message || '';
+              console.warn('[NimbusPost] Courier failed:', courier?.courier_name, '→', msg);
+              // If error is not pickup-related, stop retrying
+              const isPickupErr = /pickup not available|not serviceable|not available/i.test(msg);
+              if (!isPickupErr) break;
+            } catch (retryErr: any) {
+              console.warn('[NimbusPost] Courier attempt error:', retryErr.message);
+              break;
+            }
+          }
+
+          if (awbSuccess && npResp?.data?.data?.awb_number) {
             order.trackingNumber = npResp.data.data.awb_number;
             order.courierName = npResp.data.data.courier_name || 'NimbusPost';
             order.packingDetails = packingDetails;
           } else {
-            const errMsg = npResp.data?.message || JSON.stringify(npResp.data);
-            console.error('[NimbusPost Error]', JSON.stringify(npResp.data, null, 2));
+            const errMsg = npResp?.data?.message || JSON.stringify(npResp?.data);
+            console.error('[NimbusPost Error]', JSON.stringify(npResp?.data, null, 2));
             return res.status(400).json({ success: false, message: 'NimbusPost Error: ' + errMsg });
           }
         } catch (apiErr: any) {
