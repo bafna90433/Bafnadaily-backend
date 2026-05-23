@@ -878,12 +878,12 @@ ordersRouter.put('/:id/status', adminProtect, async (req: Request, res: Response
           let totalWeightGrams = 0;
           let dims = BOX_DIMS['A28'];
           packingDetails.forEach((box: any) => {
-            if (box.boxType === 'CVR' && box.customWeightKg) {
+            if ((box.boxType === 'CVR' || box.boxType === 'CUSTOM') && box.customWeightKg) {
               totalWeightGrams += box.customWeightKg * 1000 * (box.quantity || 1);
             } else {
               totalWeightGrams += (Number(box.totalWeight) || 0) * 1000;
             }
-            if (box.boxType === 'CVR' && box.customDims) {
+            if (box.customDims) {
               dims = box.customDims;
             } else if (BOX_DIMS[box.boxType]) {
               dims = BOX_DIMS[box.boxType];
@@ -893,11 +893,47 @@ ordersRouter.put('/:id/status', adminProtect, async (req: Request, res: Response
           const addr = order.shippingAddress;
           const collectAmt = order.paymentMethod === 'cod' ? Math.max(0, order.total - (order.advanceAmount || 0)) : 0;
           const orderRef = forceReship ? `${order.orderNumber}-R${Date.now().toString().slice(-4)}` : order.orderNumber;
+          const paymentTypeStr = order.paymentMethod === 'cod' ? 'cod' : 'prepaid';
 
-          // ── Step 3: Create shipment ──
+          // ── Step 3: Fetch pickup warehouse details from NimbusPost ──
+          let pickupObj: any = { warehouse_name: s.nimbuspost.pickupWarehouseName || 'Primary' };
+          try {
+            const warehouseResp = await axios.get('https://api.nimbuspost.com/v1/pickup-addresses', {
+              headers: { Authorization: `Bearer ${npToken}` }
+            });
+            const warehouses: any[] = warehouseResp.data?.data || [];
+            const warehouseName = (s.nimbuspost.pickupWarehouseName || 'Primary').toLowerCase().trim();
+            const matched = warehouses.find((w: any) =>
+              (w.warehouse_name || w.name || '').toLowerCase().trim() === warehouseName
+            ) || warehouses[0];
+            if (matched) {
+              pickupObj = {
+                warehouse_name: matched.warehouse_name || matched.name,
+                contact_name: matched.contact_person || matched.contact_name || matched.name || 'Admin',
+                address: matched.address || matched.address_1 || '',
+                address_2: matched.address_2 || '',
+                city: matched.city || '',
+                state: matched.state || '',
+                pincode: String(matched.pincode || matched.pin_code || ''),
+                phone: String(matched.phone || matched.mobile || ''),
+              };
+            }
+          } catch (whErr: any) {
+            console.warn('[NimbusPost] Could not fetch warehouses:', whErr.message);
+          }
+
+          // ── Step 4: Build order_items ──
+          const orderItems = (order.items || []).map((it: any) => ({
+            name: it.name || 'Product',
+            qty: it.quantity || 1,
+            price: it.price || 0,
+            sku: it.sku || '',
+          }));
+
+          // ── Step 5: Create shipment ──
           const npPayload = {
             order_number: orderRef,
-            payment_type: order.paymentMethod === 'cod' ? 2 : 1,  // 1=prepaid, 2=COD
+            payment_type: paymentTypeStr,
             package_weight: Math.max(10, totalWeightGrams),
             package_length: dims.l,
             package_breadth: dims.b,
@@ -910,13 +946,12 @@ ordersRouter.put('/:id/status', adminProtect, async (req: Request, res: Response
               address_2: '',
               city: addr.city,
               state: addr.state,
-              pincode: addr.pincode,
-              phone: addr.phone || order.user?.phone || '9999999999',
+              pincode: String(addr.pincode),
+              phone: String(addr.phone || order.user?.phone || '9999999999'),
             },
-            pickup: {
-              warehouse_name: s.nimbuspost.pickupWarehouseName || 'Primary',
-            },
-            courier_id: 0,  // 0 = auto-select cheapest available
+            pickup: pickupObj,
+            order_items: orderItems,
+            courier_id: 0,
           };
 
           const npResp = await axios.post(
