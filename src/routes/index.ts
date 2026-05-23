@@ -1735,4 +1735,50 @@ adminRouter.get('/razorpay/payments', adminProtect, async (req: Request, res: Re
   }
 });
 
+// ─── POST /admin/razorpay/refund ──────────────────────────────────────────────
+adminRouter.post('/razorpay/refund', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { paymentId, amount, reason } = req.body;
+    if (!paymentId) return res.status(400).json({ success: false, message: 'paymentId required' });
+
+    const s = await SiteSettings.findOne();
+    if (!s?.razorpay?.keyId || !s?.razorpay?.keySecret) {
+      return res.status(400).json({ success: false, message: 'Razorpay not configured' });
+    }
+    const auth = Buffer.from(`${s.razorpay.keyId}:${s.razorpay.keySecret}`).toString('base64');
+
+    const body: any = { speed: 'normal' };
+    if (amount) body.amount = Math.round(Number(amount) * 100); // convert to paise
+    if (reason) body.notes = { reason };
+
+    const rzResp = await axios.post(
+      `https://api.razorpay.com/v1/payments/${paymentId}/refund`,
+      body,
+      { headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' } }
+    );
+
+    // Update order paymentStatus to refunded if matched
+    const order = await Order.findOne({ paymentId }) as any;
+    if (order) {
+      order.paymentStatus = 'refunded';
+      order.statusHistory.push({ status: order.orderStatus, note: `Refund initiated: ₹${amount || 'full'} — ${reason || 'No reason'}`, updatedAt: new Date() });
+      await order.save();
+    }
+
+    res.json({
+      success: true,
+      refund: {
+        id: rzResp.data.id,
+        amount: rzResp.data.amount / 100,
+        status: rzResp.data.status,
+        speed: rzResp.data.speed_processed,
+      },
+      message: `Refund of ₹${rzResp.data.amount / 100} initiated successfully`
+    });
+  } catch (err: any) {
+    const msg = err.response?.data?.error?.description || err.message;
+    res.status(500).json({ success: false, message: 'Refund failed: ' + msg });
+  }
+});
+
 export default adminRouter;
