@@ -599,6 +599,13 @@ ordersRouter.post('/', protect, async (req: AuthRequest, res: Response) => {
     const shippingCharge = subtotal >= freeShippingThreshold ? 0 : standardShipping;
     const total = subtotal - discount + shippingCharge + (giftWrapping ? giftWrapPrice : 0);
 
+    // ── Calculate correct advance amount SERVER-SIDE (don't trust frontend) ──
+    // If COD + paymentId present → advance was paid. Calculate expected advance from settings.
+    const codAdvancePct = settings?.codAdvancePercent || 30;
+    const serverAdvanceAmount = (paymentMethod === 'cod' && paymentId)
+      ? Math.ceil(total * codAdvancePct / 100)
+      : (advanceAmount || 0);
+
     // ── Razorpay Payment Verification ──
     if (paymentId && settings?.razorpay?.enabled && settings.razorpay.keyId && settings.razorpay.keySecret) {
       try {
@@ -625,12 +632,15 @@ ordersRouter.post('/', protect, async (req: AuthRequest, res: Response) => {
           return res.status(400).json({ success: false, message: `Payment not captured. Status: ${rzStatus}` });
         }
 
-        // For COD advance payment, verify advanceAmount; for full online, verify total
-        const isAdvance = paymentMethod === 'cod' && advanceAmount > 0;
-        const expectedPaise = isAdvance ? Math.round((advanceAmount || 0) * 100) : Math.round(total * 100);
+        // For COD advance: verify paid amount = server-calculated advance (NOT frontend value)
+        // For full online: verify paid amount = total
+        const isCodAdvance = paymentMethod === 'cod';
+        const expectedPaise = isCodAdvance
+          ? Math.round(serverAdvanceAmount * 100)
+          : Math.round(total * 100);
 
         if (paidPaise < expectedPaise) {
-          console.error(`[Payment Fraud] Order total ₹${total}, paid ₹${paidPaise / 100} (${paidPaise} paise). PaymentId: ${paymentId}`);
+          console.error(`[Payment Fraud] Order ₹${total}, method: ${paymentMethod}, expected advance ₹${serverAdvanceAmount}, paid ₹${paidPaise / 100}. PaymentId: ${paymentId}`);
           return res.status(400).json({
             success: false,
             message: `Payment amount mismatch. Expected ₹${expectedPaise / 100}, received ₹${paidPaise / 100}. Order not placed.`
@@ -645,7 +655,7 @@ ordersRouter.post('/', protect, async (req: AuthRequest, res: Response) => {
     const order = await Order.create({
       user: req.user._id, items: orderItems, shippingAddress, paymentMethod, couponCode,
       giftWrapping, giftMessage, notes, subtotal, discount, shippingCharge, total,
-      advanceAmount: advanceAmount || 0, gstin: gstin || '',
+      advanceAmount: serverAdvanceAmount, gstin: gstin || '',  // use server-calculated advance
       paymentId, rzOrderId: rzOrderId || '', paymentStatus: paymentId ? 'paid' : 'pending',
       orderStatus: 'confirmed',
       statusHistory: [{ status: 'confirmed', note: 'Order placed', updatedAt: new Date() }],
