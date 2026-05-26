@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import { SiteSettings } from '../models/Settings';
 import { User } from '../models/User';
-import { adminProtect, requireRole } from '../middleware/auth';
+import { adminProtect, requireRole, protect } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import getImageKit from "../config/imagekit";
 import multer from 'multer';
@@ -154,17 +154,24 @@ router.put('/section/:key', adminProtect, async (req: Request, res: Response) =>
 });
 
 // ─── Razorpay create order ────────────────────────────────────────────────────
-router.post('/razorpay/create-order', async (req: Request, res: Response) => {
+router.post('/razorpay/create-order', protect, async (req: Request, res: Response) => {
   try {
     const s = await SiteSettings.findOne();
     if (!s?.razorpay?.enabled || !s.razorpay.keyId || !s.razorpay.keySecret) {
       return res.status(400).json({ success: false, message: 'Razorpay not configured' });
     }
-    const { amount } = req.body; // amount in paise
+    const { amount, items } = req.body;
+
+    // ── Security: Verify amount is reasonable (min ₹1, max ₹1,00,000) ──
+    const amountNum = Number(amount);
+    if (!amountNum || amountNum < 1 || amountNum > 100000) {
+      return res.status(400).json({ success: false, message: 'Invalid amount' });
+    }
+
     const auth = Buffer.from(`${s.razorpay.keyId}:${s.razorpay.keySecret}`).toString('base64');
     const response = await axios.post(
       'https://api.razorpay.com/v1/orders',
-      { amount: Math.round(amount * 100), currency: 'INR', receipt: `rcpt_${Date.now()}` },
+      { amount: Math.round(amountNum * 100), currency: 'INR', receipt: `rcpt_${Date.now()}` },
       { headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' } }
     );
     res.json({ success: true, order: response.data, keyId: s.razorpay.keyId });
