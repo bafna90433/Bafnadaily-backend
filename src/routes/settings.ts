@@ -140,6 +140,23 @@ router.post('/logo', adminProtect, upload.single('logo'), async (req: any, res: 
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+// ─── Upload favicon ───────────────────────────────────────────────────────────
+router.post('/favicon', adminProtect, upload.single('favicon'), async (req: any, res: Response) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file' });
+    let s = await SiteSettings.findOne();
+    if (!s) s = await SiteSettings.create({});
+    const result = await getImageKit().upload({
+      file: req.file.buffer,
+      fileName: `favicon_${Date.now()}`,
+      folder: '/reteiler/brand',
+    });
+    s.favicon = result.url;
+    await s.save();
+    res.json({ success: true, url: result.url, message: 'Favicon updated!' });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 // ─── Toggle homepage section ──────────────────────────────────────────────────
 router.put('/section/:key', adminProtect, async (req: Request, res: Response) => {
   try {
