@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import crypto from 'crypto';
 import javascriptBarcodeReader from 'javascript-barcode-reader';
 import mongoose from 'mongoose';
 import axios from 'axios';
@@ -569,7 +570,7 @@ export const ordersRouter = express.Router();
 
 ordersRouter.post('/', protect, async (req: AuthRequest, res: Response) => {
   try {
-    const { items, shippingAddress, paymentMethod, couponCode, giftWrapping, giftMessage, notes, paymentId, rzOrderId, paymentStatus, advanceAmount, gstin } = req.body;
+    const { items, shippingAddress, paymentMethod, couponCode, giftWrapping, giftMessage, notes, paymentId, rzOrderId, paymentSignature, paymentStatus, advanceAmount, gstin } = req.body;
     let subtotal = 0;
     const orderItems: any[] = [];
     for (const item of items) {
@@ -597,6 +598,50 @@ ordersRouter.post('/', protect, async (req: AuthRequest, res: Response) => {
 
     const shippingCharge = subtotal >= freeShippingThreshold ? 0 : standardShipping;
     const total = subtotal - discount + shippingCharge + (giftWrapping ? giftWrapPrice : 0);
+
+    // ── Razorpay Payment Verification ──
+    if (paymentId && settings?.razorpay?.enabled && settings.razorpay.keyId && settings.razorpay.keySecret) {
+      try {
+        const auth = Buffer.from(`${settings.razorpay.keyId}:${settings.razorpay.keySecret}`).toString('base64');
+
+        // 1. Verify signature (prevents tampered payment IDs)
+        if (paymentSignature && rzOrderId) {
+          const expectedSig = crypto.createHmac('sha256', settings.razorpay.keySecret)
+            .update(`${rzOrderId}|${paymentId}`).digest('hex');
+          if (expectedSig !== paymentSignature) {
+            return res.status(400).json({ success: false, message: 'Invalid payment signature. Order not placed.' });
+          }
+        }
+
+        // 2. Verify actual amount paid via Razorpay API
+        const rzPayResp = await axios.get(`https://api.razorpay.com/v1/payments/${paymentId}`, {
+          headers: { Authorization: `Basic ${auth}` }
+        });
+        const paidPaise: number = rzPayResp.data.amount; // amount in paise
+        const rzStatus: string = rzPayResp.data.status;
+
+        // Must be 'captured' or 'authorized'
+        if (rzStatus !== 'captured' && rzStatus !== 'authorized') {
+          return res.status(400).json({ success: false, message: `Payment not captured. Status: ${rzStatus}` });
+        }
+
+        // For COD advance payment, verify advanceAmount; for full online, verify total
+        const isAdvance = paymentMethod === 'cod' && advanceAmount > 0;
+        const expectedPaise = isAdvance ? Math.round((advanceAmount || 0) * 100) : Math.round(total * 100);
+
+        if (paidPaise < expectedPaise) {
+          console.error(`[Payment Fraud] Order total ₹${total}, paid ₹${paidPaise / 100} (${paidPaise} paise). PaymentId: ${paymentId}`);
+          return res.status(400).json({
+            success: false,
+            message: `Payment amount mismatch. Expected ₹${expectedPaise / 100}, received ₹${paidPaise / 100}. Order not placed.`
+          });
+        }
+      } catch (verifyErr: any) {
+        console.error('[Payment Verify Error]', verifyErr.message);
+        return res.status(400).json({ success: false, message: 'Payment verification failed: ' + verifyErr.message });
+      }
+    }
+
     const order = await Order.create({
       user: req.user._id, items: orderItems, shippingAddress, paymentMethod, couponCode,
       giftWrapping, giftMessage, notes, subtotal, discount, shippingCharge, total,
