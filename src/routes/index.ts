@@ -8,7 +8,7 @@ import { Product } from '../models/Product';
 import { Category } from '../models/Product';
 import { InventoryLog } from '../models/InventoryLog';
 import { Order, Cart, Wishlist, Banner, Coupon } from '../models/Order';
-import { User } from '../models/User';
+import { User, Admin } from '../models/User';
 import { StaffReport } from '../models/StaffReport';
 import { StaffFolder } from '../models/StaffFolder';
 import { StaffFeedback } from '../models/StaffFeedback';
@@ -1321,7 +1321,7 @@ ordersRouter.delete('/:id', adminProtect, async (req: Request, res: Response) =>
 // ─── POS (Point of Sale) — Walk-In / Staff Sale ───────────────────────────────
 // Allows admin/staff to create in-store orders (cash or online).
 // Deducts stock and marks the order as delivered immediately.
-ordersRouter.post('/pos', adminProtect, async (req: Request, res: Response) => {
+ordersRouter.post('/pos', adminProtect, async (req: AuthRequest, res: Response) => {
   try {
     const { items, customerName, customerPhone, paymentMethod, note } = req.body;
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -1358,11 +1358,11 @@ ordersRouter.post('/pos', adminProtect, async (req: Request, res: Response) => {
     }
 
     // Find first admin user to attach order to (POS orders don't need a customer account)
-    const adminUser = await User.findOne({ role: { $in: ['admin', 'superadmin'] } }).select('_id');
-    if (!adminUser) return res.status(500).json({ success: false, message: 'No admin user found in system' });
+    const adminUserId = req.admin?._id || (await Admin.findOne({ role: { $in: ['admin', 'superadmin'] } }).select('_id'))?._id;
+    if (!adminUserId) return res.status(500).json({ success: false, message: 'No admin user found in system' });
 
     const order = await Order.create({
-      user: adminUser._id,
+      user: adminUserId,
       items: orderItems,
       shippingAddress: {
         name: customerName || 'Walk-In Customer',
