@@ -784,78 +784,6 @@ ordersRouter.put('/:id/cancel', protect, async (req: AuthRequest, res: Response)
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
-ordersRouter.post('/staff-order', adminProtect, async (req: Request, res: Response) => {
-  try {
-    const { staffName, staffPhone, items, paymentMethod, notes } = req.body;
-    if (!staffName || !staffPhone || !items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ success: false, message: 'Missing staff details or items' });
-    }
-
-    let user = await User.findOne({ phone: staffPhone });
-    if (!user) {
-      user = await User.create({
-        name: staffName,
-        phone: staffPhone,
-        email: `staff_${staffPhone}@bafnadaily.com`,
-        customerType: 'retail',
-        isActive: true
-      });
-    }
-
-    let subtotal = 0;
-    const orderItems: any[] = [];
-    for (const item of items) {
-      const product = await Product.findById(item.product);
-      if (!product) {
-        return res.status(404).json({ success: false, message: `Product not found: ${item.product}` });
-      }
-      orderItems.push({
-        product: product._id,
-        name: product.name,
-        image: product.images[0]?.url,
-        price: product.price,
-        mrp: product.mrp || product.price,
-        quantity: item.quantity,
-        sku: product.sku || '',
-        gstRate: product.gstRate || 0
-      });
-      subtotal += product.price * item.quantity;
-      product.stock = Math.max(0, product.stock - item.quantity);
-      product.sold += item.quantity;
-      await product.save();
-    }
-
-    const order = await Order.create({
-      user: user._id,
-      items: orderItems,
-      shippingAddress: {
-        name: staffName,
-        phone: staffPhone,
-        addressLine1: 'Office Picked (Personal Use)',
-        city: 'Office',
-        state: 'Office',
-        pincode: '000000'
-      },
-      paymentMethod: paymentMethod || 'cod',
-      paymentStatus: 'paid',
-      orderStatus: 'delivered',
-      subtotal,
-      shippingCharge: 0,
-      discount: 0,
-      total: subtotal,
-      notes: `Staff Order (Personal Use) - Method: ${paymentMethod}. Note: ${notes || 'None'}`,
-      statusHistory: [
-        { status: 'placed', note: 'Staff order created by admin' },
-        { status: 'delivered', note: 'Handed over to staff' }
-      ]
-    });
-
-    res.status(201).json({ success: true, order });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
 ordersRouter.get('/', adminProtect, async (req: Request, res: Response) => {
   try {
     const { status, page = 1, limit = 20, search } = req.query as any;
@@ -1389,6 +1317,75 @@ ordersRouter.delete('/:id', adminProtect, async (req: Request, res: Response) =>
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+
+// ─── POS (Point of Sale) — Walk-In / Staff Sale ───────────────────────────────
+// Allows admin/staff to create in-store orders (cash or online).
+// Deducts stock and marks the order as delivered immediately.
+ordersRouter.post('/pos', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { items, customerName, customerPhone, paymentMethod, note } = req.body;
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, message: 'No items provided' });
+    }
+    if (!['cash', 'online'].includes(paymentMethod)) {
+      return res.status(400).json({ success: false, message: 'Invalid payment method. Use cash or online.' });
+    }
+
+    let subtotal = 0;
+    const orderItems: any[] = [];
+
+    for (const item of items) {
+      const product = await Product.findById(item.productId);
+      if (!product) return res.status(404).json({ success: false, message: `Product not found: ${item.productId}` });
+      if (product.stock < item.quantity) {
+        return res.status(400).json({ success: false, message: `Insufficient stock for "${product.name}". Available: ${product.stock}` });
+      }
+      const salePrice = item.price ?? product.price;
+      orderItems.push({
+        product: product._id,
+        name: product.name,
+        image: product.images?.[0]?.url || '',
+        price: salePrice,
+        mrp: product.mrp || product.price,
+        quantity: item.quantity,
+        sku: product.sku || '',
+        gstRate: product.gstRate || 0,
+      });
+      subtotal += salePrice * item.quantity;
+      product.stock = Math.max(0, product.stock - item.quantity);
+      product.sold = (product.sold || 0) + item.quantity;
+      await product.save();
+    }
+
+    // Find first admin user to attach order to (POS orders don't need a customer account)
+    const adminUser = await User.findOne({ role: { $in: ['admin', 'superadmin'] } }).select('_id');
+    if (!adminUser) return res.status(500).json({ success: false, message: 'No admin user found in system' });
+
+    const order = await Order.create({
+      user: adminUser._id,
+      items: orderItems,
+      shippingAddress: {
+        name: customerName || 'Walk-In Customer',
+        phone: customerPhone || '',
+        addressLine1: 'In-Store Sale (POS)',
+        city: 'In-Store',
+        state: '',
+        pincode: '',
+      },
+      paymentMethod: paymentMethod === 'online' ? 'online' : 'cod',
+      paymentStatus: 'paid',
+      orderStatus: 'delivered',
+      subtotal,
+      shippingCharge: 0,
+      discount: 0,
+      total: subtotal,
+      notes: `POS Sale — ${paymentMethod.toUpperCase()}${note ? ` — ${note}` : ''}`,
+      statusHistory: [{ status: 'delivered', note: `POS walk-in sale. Payment: ${paymentMethod.toUpperCase()}`, updatedAt: new Date() }],
+    });
+
+    res.status(201).json({ success: true, order });
+  } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+});
 
 // ─── WISHLIST ─────────────────────────────────────────────────────────────────
 export const wishlistRouter = express.Router();
