@@ -784,6 +784,78 @@ ordersRouter.put('/:id/cancel', protect, async (req: AuthRequest, res: Response)
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+ordersRouter.post('/staff-order', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { staffName, staffPhone, items, paymentMethod, notes } = req.body;
+    if (!staffName || !staffPhone || !items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, message: 'Missing staff details or items' });
+    }
+
+    let user = await User.findOne({ phone: staffPhone });
+    if (!user) {
+      user = await User.create({
+        name: staffName,
+        phone: staffPhone,
+        email: `staff_${staffPhone}@bafnadaily.com`,
+        customerType: 'retail',
+        isActive: true
+      });
+    }
+
+    let subtotal = 0;
+    const orderItems: any[] = [];
+    for (const item of items) {
+      const product = await Product.findById(item.product);
+      if (!product) {
+        return res.status(404).json({ success: false, message: `Product not found: ${item.product}` });
+      }
+      orderItems.push({
+        product: product._id,
+        name: product.name,
+        image: product.images[0]?.url,
+        price: product.price,
+        mrp: product.mrp || product.price,
+        quantity: item.quantity,
+        sku: product.sku || '',
+        gstRate: product.gstRate || 0
+      });
+      subtotal += product.price * item.quantity;
+      product.stock = Math.max(0, product.stock - item.quantity);
+      product.sold += item.quantity;
+      await product.save();
+    }
+
+    const order = await Order.create({
+      user: user._id,
+      items: orderItems,
+      shippingAddress: {
+        name: staffName,
+        phone: staffPhone,
+        addressLine1: 'Office Picked (Personal Use)',
+        city: 'Office',
+        state: 'Office',
+        pincode: '000000'
+      },
+      paymentMethod: paymentMethod || 'cod',
+      paymentStatus: 'paid',
+      orderStatus: 'delivered',
+      subtotal,
+      shippingCharge: 0,
+      discount: 0,
+      total: subtotal,
+      notes: `Staff Order (Personal Use) - Method: ${paymentMethod}. Note: ${notes || 'None'}`,
+      statusHistory: [
+        { status: 'placed', note: 'Staff order created by admin' },
+        { status: 'delivered', note: 'Handed over to staff' }
+      ]
+    });
+
+    res.status(201).json({ success: true, order });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 ordersRouter.get('/', adminProtect, async (req: Request, res: Response) => {
   try {
     const { status, page = 1, limit = 20, search } = req.query as any;
