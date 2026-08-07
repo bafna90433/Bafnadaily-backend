@@ -356,6 +356,132 @@ productsRouter.put('/:id', adminProtect, async (req: Request, res: Response) => 
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+// ── BULK UPDATE PRODUCTS FROM EXCEL/CSV ──────────────────────────────────────
+productsRouter.post('/bulk-update', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { products } = req.body;
+    if (!products || !Array.isArray(products) || products.length === 0) {
+      return res.status(400).json({ success: false, message: 'No product data provided for bulk update' });
+    }
+
+    let updatedCount = 0;
+    const errors: string[] = [];
+
+    for (const item of products) {
+      const { id, _id, sku, barcode, stock, price, mrp, gstRate, isActive, name } = item;
+
+      const searchId = _id || id;
+      let product: any = null;
+
+      if (searchId && mongoose.Types.ObjectId.isValid(searchId)) {
+        product = await Product.findById(searchId);
+      }
+      if (!product && sku) {
+        product = await Product.findOne({ sku: String(sku).trim() });
+      }
+      if (!product && barcode) {
+        product = await Product.findOne({ barcode: String(barcode).trim() });
+      }
+      if (!product && name) {
+        product = await Product.findOne({ name: String(name).trim() });
+      }
+
+      if (!product) {
+        errors.push(`Product not found: ${name || sku || barcode || searchId}`);
+        continue;
+      }
+
+      let changed = false;
+
+      // Update Stock
+      if (stock !== undefined && stock !== null && stock !== '' && !isNaN(Number(stock))) {
+        const newStock = Math.max(0, Number(stock));
+        if (product.stock !== newStock) {
+          const oldStock = product.stock;
+          product.stock = newStock;
+          changed = true;
+
+          // Create inventory log
+          const diff = newStock - oldStock;
+          if (diff !== 0) {
+            await InventoryLog.create({
+              productId: product._id,
+              type: diff > 0 ? 'inward' : 'outward',
+              quantity: Math.abs(diff),
+              oldStock,
+              newStock,
+              note: `Bulk Excel Stock Update`
+            });
+          }
+        }
+      }
+
+      // Update Price
+      if (price !== undefined && price !== null && price !== '' && !isNaN(Number(price))) {
+        const newPrice = Number(price);
+        if (product.price !== newPrice) {
+          product.price = newPrice;
+          changed = true;
+        }
+      }
+
+      // Update MRP
+      if (mrp !== undefined && mrp !== null && mrp !== '' && !isNaN(Number(mrp))) {
+        const newMrp = Number(mrp);
+        if (product.mrp !== newMrp) {
+          product.mrp = newMrp;
+          changed = true;
+        }
+      }
+
+      // Update GST Rate
+      if (gstRate !== undefined && gstRate !== null && gstRate !== '' && !isNaN(Number(gstRate))) {
+        const newGst = Number(gstRate);
+        if (product.gstRate !== newGst) {
+          product.gstRate = newGst;
+          changed = true;
+        }
+      }
+
+      // Update SKU
+      if (sku && String(sku).trim() !== '' && product.sku !== String(sku).trim()) {
+        product.sku = String(sku).trim();
+        changed = true;
+      }
+
+      // Update Barcode
+      if (barcode && String(barcode).trim() !== '' && product.barcode !== String(barcode).trim()) {
+        product.barcode = String(barcode).trim();
+        changed = true;
+      }
+
+      // Update Active status
+      if (isActive !== undefined && isActive !== null && isActive !== '') {
+        const newActive = typeof isActive === 'boolean' ? isActive : String(isActive).toLowerCase() === 'true' || String(isActive) === '1' || String(isActive).toLowerCase() === 'active';
+        if (product.isActive !== newActive) {
+          product.isActive = newActive;
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        await product.save();
+        updatedCount++;
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Bulk update complete! Successfully updated ${updatedCount} product(s).`,
+      updatedCount,
+      errorsCount: errors.length,
+      errors: errors.slice(0, 10)
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // ── BULK DELETE Products (Admin only, requires deletePassword) ────────────────
 productsRouter.delete('/bulk', adminProtect, async (req: Request, res: Response) => {
   try {
