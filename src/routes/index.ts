@@ -1317,6 +1317,174 @@ ordersRouter.delete('/:id', adminProtect, async (req: Request, res: Response) =>
   } catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+// ── HELPER: Order Edit Password Verification ─────────────────────────────────
+async function verifyOrderEditPassword(password: string): Promise<{ valid: boolean; message?: string }> {
+  if (!password) return { valid: false, message: 'Edit password required' };
+  const settings = await SiteSettings.findOne().select('editPassword deletePassword');
+  const requiredPassword = settings?.editPassword || settings?.deletePassword;
+  if (!requiredPassword) {
+    return { valid: false, message: 'Order Edit Password not set in Settings. Please set it in Settings → Advanced.' };
+  }
+  if (password !== requiredPassword) {
+    return { valid: false, message: 'Incorrect edit password ❌' };
+  }
+  return { valid: true };
+}
+
+// ── VERIFY ORDER EDIT PASSWORD ───────────────────────────────────────────────
+ordersRouter.post('/verify-edit-password', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { password } = req.body;
+    const passCheck = await verifyOrderEditPassword(password);
+    if (!passCheck.valid) return res.status(400).json({ success: false, message: passCheck.message });
+    res.json({ success: true, message: 'Password verified! Order items editing unlocked.' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── REMOVE ITEM FROM ORDER ───────────────────────────────────────────────────
+ordersRouter.delete('/:id/items/:itemIndex', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { id, itemIndex } = req.params;
+    const { password } = req.body;
+
+    const passCheck = await verifyOrderEditPassword(password);
+    if (!passCheck.valid) return res.status(400).json({ success: false, message: passCheck.message });
+
+    const index = parseInt(itemIndex, 10);
+    if (isNaN(index)) return res.status(400).json({ success: false, message: 'Invalid item index' });
+
+    const order = await Order.findById(id).populate('user', 'name phone');
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+
+    if (!order.items || order.items.length <= 1) {
+      return res.status(400).json({ success: false, message: 'Cannot remove the last item. Cancel the order instead if needed.' });
+    }
+
+    if (index < 0 || index >= order.items.length) {
+      return res.status(400).json({ success: false, message: 'Item index out of bounds' });
+    }
+
+    const removedItem = order.items.splice(index, 1)[0];
+
+    const subtotal = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    order.subtotal = subtotal;
+    order.total = Math.max(0, subtotal + (order.shippingCharge || 0) - (order.discount || 0));
+
+    order.statusHistory.push({
+      status: order.orderStatus,
+      note: `Removed item: ${removedItem.name} (${removedItem.quantity}x)`,
+      updatedAt: new Date()
+    });
+
+    await order.save();
+    res.json({ success: true, message: `Removed ${removedItem.name} from order`, order });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── REPLACE ITEM IN ORDER ───────────────────────────────────────────────────
+ordersRouter.put('/:id/items/:itemIndex/replace', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { id, itemIndex } = req.params;
+    const { newProductId, quantity, customPrice, variant, password } = req.body;
+
+    const passCheck = await verifyOrderEditPassword(password);
+    if (!passCheck.valid) return res.status(400).json({ success: false, message: passCheck.message });
+
+    const index = parseInt(itemIndex, 10);
+
+    if (isNaN(index)) return res.status(400).json({ success: false, message: 'Invalid item index' });
+    if (!newProductId) return res.status(400).json({ success: false, message: 'New product ID required' });
+
+    const order = await Order.findById(id).populate('user', 'name phone');
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+
+    if (index < 0 || !order.items || index >= order.items.length) {
+      return res.status(400).json({ success: false, message: 'Item index out of bounds' });
+    }
+
+    const newProduct = await Product.findById(newProductId);
+    if (!newProduct) return res.status(404).json({ success: false, message: 'Replacement product not found' });
+
+    const oldItem = order.items[index];
+    const itemQty = quantity && Number(quantity) > 0 ? Number(quantity) : oldItem.quantity;
+    const itemPrice = typeof customPrice === 'number' && customPrice >= 0 ? customPrice : newProduct.price;
+
+    order.items[index] = {
+      product: newProduct._id,
+      name: newProduct.name,
+      image: newProduct.images?.[0]?.url || '',
+      price: itemPrice,
+      mrp: newProduct.mrp || itemPrice,
+      quantity: itemQty,
+      variant: variant || '',
+      sku: newProduct.sku || '',
+      gstRate: newProduct.gstRate || 0,
+    };
+
+    const subtotal = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    order.subtotal = subtotal;
+    order.total = Math.max(0, subtotal + (order.shippingCharge || 0) - (order.discount || 0));
+
+    order.statusHistory.push({
+      status: order.orderStatus,
+      note: `Replaced item "${oldItem.name}" with "${newProduct.name}" (${itemQty}x @ ₹${itemPrice})`,
+      updatedAt: new Date()
+    });
+
+    await order.save();
+    res.json({ success: true, message: `Replaced "${oldItem.name}" with "${newProduct.name}"`, order });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── UPDATE ITEM QUANTITY IN ORDER ───────────────────────────────────────────
+ordersRouter.put('/:id/items/:itemIndex/quantity', adminProtect, async (req: Request, res: Response) => {
+  try {
+    const { id, itemIndex } = req.params;
+    const { quantity, password } = req.body;
+
+    const passCheck = await verifyOrderEditPassword(password);
+    if (!passCheck.valid) return res.status(400).json({ success: false, message: passCheck.message });
+
+    const index = parseInt(itemIndex, 10);
+    const newQty = Number(quantity);
+
+    if (isNaN(index)) return res.status(400).json({ success: false, message: 'Invalid item index' });
+    if (isNaN(newQty) || newQty <= 0) return res.status(400).json({ success: false, message: 'Quantity must be greater than 0' });
+
+    const order = await Order.findById(id).populate('user', 'name phone');
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+
+    if (index < 0 || !order.items || index >= order.items.length) {
+      return res.status(400).json({ success: false, message: 'Item index out of bounds' });
+    }
+
+    const item = order.items[index];
+    const oldQty = item.quantity;
+    item.quantity = newQty;
+
+    const subtotal = order.items.reduce((sum, it) => sum + (it.price * it.quantity), 0);
+    order.subtotal = subtotal;
+    order.total = Math.max(0, subtotal + (order.shippingCharge || 0) - (order.discount || 0));
+
+    order.statusHistory.push({
+      status: order.orderStatus,
+      note: `Updated quantity of "${item.name}" from ${oldQty} to ${newQty}`,
+      updatedAt: new Date()
+    });
+
+    await order.save();
+    res.json({ success: true, message: `Updated quantity of "${item.name}" to ${newQty}`, order });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 
 // ─── POS (Point of Sale) — Walk-In / Staff Sale ───────────────────────────────
 // Allows admin/staff to create in-store orders (cash or online).

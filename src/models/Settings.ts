@@ -94,6 +94,7 @@ export interface ISiteSettings extends Document {
   googleAnalyticsId: string;
   googleAnalyticsEnabled: boolean;
   deletePassword: string; // Password required to delete an order from admin panel
+  editPassword?: string;  // Password required to edit/modify items in an order
 }
 
 const siteSettingsSchema = new Schema<ISiteSettings>(
@@ -183,6 +184,7 @@ const siteSettingsSchema = new Schema<ISiteSettings>(
     googleAnalyticsId: { type: String, default: '' },
     googleAnalyticsEnabled: { type: Boolean, default: false },
     deletePassword: { type: String, default: '' }, // Admin sets this in Settings → Advanced
+    editPassword: { type: String, default: '' },   // Password to modify order items in admin panel
   },
   { timestamps: true }
 );
