@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import connectDB from './config/db';
+import { migrateMongoIfRequested } from './db/migrate-mongo';
 import { Admin } from './models/User';
 import { SiteSettings } from './models/Settings';
 import authRouter from './routes/auth';
@@ -16,7 +17,6 @@ import feedRouter from './routes/feed';
 import sitemapRouter from './routes/sitemap';
 
 dotenv.config();
-connectDB();
 
 const app = express();
 
@@ -68,10 +68,10 @@ app.use((err: any, req: any, res: any, _next: any) => {
 
 const PORT = Number(process.env.PORT) || 5000;
 
-app.listen(PORT, '0.0.0.0', async () => {
-  console.log(`🚀 Reteiler Server: http://localhost:${PORT}`);
+async function bootstrap(): Promise<void> {
+  await connectDB();
+  await migrateMongoIfRequested();
 
-  // Seed admin
   try {
     if (await Admin.countDocuments() === 0) {
       await Admin.create({ name: 'Super Admin', email: 'admin@reteiler.in', password: 'Admin@123', role: 'superadmin' });
@@ -79,11 +79,17 @@ app.listen(PORT, '0.0.0.0', async () => {
     }
   } catch {}
 
-  // Seed settings
   try {
     if (!await SiteSettings.findOne()) {
       await SiteSettings.create({ siteName: 'Reteiler', whatsappNumber: '7550350036' });
       console.log('✅ Settings seeded');
     }
   } catch {}
+
+  app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Reteiler Server: http://localhost:${PORT}`));
+}
+
+bootstrap().catch(error => {
+  console.error('❌ Server startup failed:', error);
+  process.exit(1);
 });

@@ -1,29 +1,11 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import { createCompatModel } from '../db/compat';
+import { StaffReport } from './StaffReport';
 
-export interface IStaffFeedback extends Document {
-  folderId?: mongoose.Types.ObjectId | null;
-  reportId?: mongoose.Types.ObjectId; // Reference to the image being discussed
-  message?: string;
-  sender: 'admin' | 'staff';
-  staffName?: string;
-  isRead: boolean;
-  audioUrl?: string;
-  audioDuration?: number;
-  createdAt: Date;
-}
+export type IStaffFeedback = any;
 
-const staffFeedbackSchema = new Schema<IStaffFeedback>(
-  {
-    folderId: { type: Schema.Types.ObjectId, ref: 'StaffFolder', default: null, index: true },
-    reportId: { type: Schema.Types.ObjectId, ref: 'StaffReport', default: null },
-    message: { type: String, default: '' },
-    sender: { type: String, enum: ['admin', 'staff'], required: true },
-    staffName: { type: String, default: 'Staff' },
-    isRead: { type: Boolean, default: false },
-    audioUrl: { type: String, default: null },
-    audioDuration: { type: Number, default: 0 },
-  },
-  { timestamps: { createdAt: true, updatedAt: false } }
-);
-
-export const StaffFeedback = mongoose.model<IStaffFeedback>('StaffFeedback', staffFeedbackSchema);
+export const StaffFeedback: any = createCompatModel({
+  name: 'StaffFeedback', delegate: 'staffFeedback',
+  fields: ['id', 'folderId', 'reportId', 'message', 'sender', 'staffName', 'isRead', 'audioUrl', 'audioDuration', 'createdAt'],
+  defaults: { folderId: null, reportId: null, message: '', staffName: 'Staff', isRead: false, audioUrl: null, audioDuration: 0 },
+  populate: { reportId: { model: () => StaffReport, local: 'reportId', as: 'reportId' } },
+});

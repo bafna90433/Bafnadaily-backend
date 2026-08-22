@@ -1,24 +1,11 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import { createCompatModel } from '../db/compat';
+import { Product } from './Product';
 
-export interface IDealOfDay extends Document {
-  product: mongoose.Types.ObjectId;
-  discountType: 'percentage' | 'flat';
-  discountValue: number;
-  dealPrice: number;
-  endTime: Date;
-  isActive: boolean;
-}
+export type IDealOfDay = any;
 
-const dealOfDaySchema = new Schema<IDealOfDay>(
-  {
-    product: { type: Schema.Types.ObjectId, ref: 'Product', required: true },
-    discountType: { type: String, enum: ['percentage', 'flat'], required: true },
-    discountValue: { type: Number, required: true, min: 0 },
-    dealPrice: { type: Number, required: true, min: 0 },
-    endTime: { type: Date, required: true },
-    isActive: { type: Boolean, default: true },
-  },
-  { timestamps: true }
-);
-
-export const DealOfDay = mongoose.model<IDealOfDay>('DealOfDay', dealOfDaySchema);
+export const DealOfDay: any = createCompatModel({
+  name: 'DealOfDay', delegate: 'dealOfDay',
+  fields: ['id', 'productId', 'discountType', 'discountValue', 'dealPrice', 'endTime', 'isActive', 'createdAt', 'updatedAt'],
+  aliases: { product: 'productId' }, defaults: { isActive: true },
+  populate: { product: { model: () => Product, local: 'product', as: 'product' } },
+});

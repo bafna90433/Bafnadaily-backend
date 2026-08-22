@@ -1,20 +1,7 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import { createCompatModel } from '../db/compat';
 
-export interface IStaffFolder extends Document {
-  name: string;
-  parentId: mongoose.Types.ObjectId | null;
-  staffName?: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
+export type IStaffFolder = any;
 
-const staffFolderSchema = new Schema<IStaffFolder>(
-  {
-    name: { type: String, required: true },
-    parentId: { type: Schema.Types.ObjectId, ref: 'StaffFolder', default: null },
-    staffName: { type: String, default: 'Staff' },
-  },
-  { timestamps: true }
-);
-
-export const StaffFolder = mongoose.model<IStaffFolder>('StaffFolder', staffFolderSchema);
+export const StaffFolder: any = createCompatModel({
+  name: 'StaffFolder', delegate: 'staffFolder', fields: ['id', 'name', 'parentId', 'staffName', 'createdAt', 'updatedAt'], defaults: { parentId: null, staffName: 'Staff' },
+});

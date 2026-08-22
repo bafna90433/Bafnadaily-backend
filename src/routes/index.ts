@@ -1,7 +1,6 @@
 import express, { Request, Response } from 'express';
 import crypto from 'crypto';
 import javascriptBarcodeReader from 'javascript-barcode-reader';
-import mongoose from 'mongoose';
 import axios from 'axios';
 import { sendWhatsAppTemplate, sanitizePhone } from '../utils/whatsapp';
 import { Product } from '../models/Product';
@@ -24,6 +23,8 @@ import getImageKit from '../config/imagekit';
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
+
+const isValidId = (value: any): boolean => typeof value === 'string' && value.trim().length > 0;
 
 // ─── UTILS ──────────────────────────────────────────────────────────────────
 async function generateUniqueSlug(Model: any, name: string): Promise<string> {
@@ -49,13 +50,12 @@ productsRouter.get('/', async (req: Request, res: Response) => {
       // Multiple IDs from frontend (parent + all subs already resolved)
       const ids = String(categoryIdsParam).split(',')
         .map(id => id.trim())
-        .filter(id => mongoose.Types.ObjectId.isValid(id))
-        .map(id => new mongoose.Types.ObjectId(id));
+        .filter(id => isValidId(id));
       if (ids.length > 0) query.category = { $in: ids };
     } else if (category) {
       // Single category — also include direct subcategories (1 level deep)
-      if (mongoose.Types.ObjectId.isValid(category)) {
-        const rootId = new mongoose.Types.ObjectId(category);
+      if (isValidId(category)) {
+        const rootId = String(category);
         const subs = await Category.find({ parent: rootId }).select('_id');
         const allIds = [rootId, ...subs.map(c => c._id)];
         query.category = { $in: allIds };
@@ -373,7 +373,7 @@ productsRouter.post('/bulk-update', adminProtect, async (req: Request, res: Resp
       const searchId = _id || id;
       let product: any = null;
 
-      if (searchId && mongoose.Types.ObjectId.isValid(searchId)) {
+      if (searchId && isValidId(searchId)) {
         product = await Product.findById(searchId);
       }
       if (!product && sku) {

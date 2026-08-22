@@ -1,132 +1,42 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import { createCompatModel } from '../db/compat';
+import { Product, Category } from './Product';
+import { User } from './User';
 
-// ─── Order ────────────────────────────────────────────────────────────────────
-export interface IOrder extends Document {
-  orderNumber: string;
-  user: mongoose.Types.ObjectId;
-  items: { product: mongoose.Types.ObjectId; name: string; image?: string; price: number; mrp?: number; quantity: number; variant?: string; sku?: string; gstRate?: number }[];
-  gstin?: string;
-  shippingAddress: { name: string; phone: string; addressLine1: string; addressLine2?: string; city: string; state: string; pincode: string };
-  paymentMethod: 'cod' | 'online' | 'upi';
-  paymentStatus: 'pending' | 'paid' | 'failed' | 'refunded';
-  paymentId?: string;
-  rzOrderId?: string;  // Razorpay order_id (order_xxx) — used to filter this site's payments
-  orderStatus: 'placed' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'returned';
-  statusHistory: { status: string; note?: string; updatedAt: Date }[];
-  subtotal: number;
-  shippingCharge: number;
-  discount: number;
-  couponCode?: string;
-  total: number;
-  advanceAmount?: number;
-  giftWrapping: boolean;
-  giftMessage?: string;
-  notes?: string;
-  trackingNumber?: string;
-  courierName?: string;
-  packingDetails?: { boxType: string; quantity: number; totalWeight: number }[];
-  wa?: { orderConfirmedSent: boolean; trackingSent: boolean; lastError: string; lastSentAt: Date | null };
-  estimatedDelivery?: Date;
-  createdAt: Date;
-  updatedAt: Date;
-}
+export type IOrder = any;
 
-const orderSchema = new Schema<IOrder>(
-  {
-    orderNumber: { type: String, unique: true },
-    user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    items: [{ product: { type: Schema.Types.ObjectId, ref: 'Product' }, name: String, image: String, price: Number, mrp: Number, quantity: Number, variant: String, sku: String, gstRate: { type: Number, default: 0 } }],
-    gstin: { type: String, default: '' },
-    shippingAddress: { name: String, phone: String, addressLine1: String, addressLine2: String, city: String, state: String, pincode: String },
-    paymentMethod: { type: String, enum: ['cod', 'online', 'upi'], default: 'cod' },
-    paymentStatus: { type: String, enum: ['pending', 'paid', 'failed', 'refunded'], default: 'pending' },
-    paymentId: String,
-    rzOrderId: { type: String, default: '' },
-    orderStatus: { type: String, enum: ['placed','confirmed','processing','shipped','delivered','cancelled','returned'], default: 'placed' },
-    statusHistory: [{ status: String, note: String, updatedAt: { type: Date, default: Date.now } }],
-    subtotal: Number,
-    shippingCharge: { type: Number, default: 0 },
-    discount: { type: Number, default: 0 },
-    couponCode: String,
-    total: Number,
-    advanceAmount: { type: Number, default: 0 },
-    giftWrapping: { type: Boolean, default: false },
-    giftMessage: String,
-    notes: String,
-    trackingNumber: { type: String, default: '' },
-    courierName: { type: String, default: '' },
-    packingDetails: {
-      type: [{ boxType: String, quantity: Number, totalWeight: Number }],
-      default: [],
-    },
-    wa: {
-      orderConfirmedSent: { type: Boolean, default: false },
-      trackingSent: { type: Boolean, default: false },
-      lastError: { type: String, default: '' },
-      lastSentAt: { type: Date, default: null },
-    },
-    estimatedDelivery: Date,
+export const Order: any = createCompatModel({
+  name: 'Order', delegate: 'order',
+  fields: ['id', 'orderNumber', 'userId', 'items', 'gstin', 'shippingAddress', 'paymentMethod', 'paymentStatus', 'paymentId', 'rzOrderId', 'orderStatus', 'statusHistory', 'subtotal', 'shippingCharge', 'discount', 'couponCode', 'total', 'advanceAmount', 'giftWrapping', 'giftMessage', 'notes', 'trackingNumber', 'courierName', 'packingDetails', 'wa', 'estimatedDelivery', 'createdAt', 'updatedAt'],
+  aliases: { user: 'userId' },
+  jsonFields: ['items', 'shippingAddress', 'statusHistory', 'packingDetails', 'wa'],
+  subdocumentArrays: ['items', 'statusHistory', 'packingDetails'],
+  defaults: { orderNumber: '', user: null, items: [], gstin: '', shippingAddress: {}, paymentMethod: 'cod', paymentStatus: 'pending', paymentId: null, rzOrderId: '', orderStatus: 'placed', statusHistory: [], subtotal: 0, shippingCharge: 0, discount: 0, couponCode: null, total: 0, advanceAmount: 0, giftWrapping: false, giftMessage: null, notes: null, trackingNumber: '', courierName: '', packingDetails: [], wa: { orderConfirmedSent: false, trackingSent: false, lastError: '', lastSentAt: null }, estimatedDelivery: null },
+  beforeSave: doc => { if (!doc.orderNumber) doc.orderNumber = `RET${Date.now().toString().slice(-8)}`; doc.items ||= []; doc.statusHistory ||= []; doc.packingDetails ||= []; doc.shippingAddress ||= {}; doc.wa ||= { orderConfirmedSent: false, trackingSent: false, lastError: '', lastSentAt: null }; },
+  populate: {
+    user: { model: () => User, local: 'user', as: 'user' },
+    'items.product': { model: () => Product, local: 'items', jsonArray: 'items', jsonField: 'product' },
   },
-  { timestamps: true }
-);
-
-orderSchema.pre('save', function (next) {
-  if (!this.orderNumber) this.orderNumber = 'RET' + Date.now().toString().slice(-8);
-  next();
+});
+export const Cart: any = createCompatModel({
+  name: 'Cart', delegate: 'cart', fields: ['id', 'userId', 'items', 'createdAt', 'updatedAt'],
+  aliases: { user: 'userId' }, jsonFields: ['items'], subdocumentArrays: ['items'], defaults: { items: [] },
+  populate: { 'items.product': { model: () => Product, local: 'items', jsonArray: 'items', jsonField: 'product' } },
 });
 
-export const Order = mongoose.model<IOrder>('Order', orderSchema);
+export const Wishlist: any = createCompatModel({
+  name: 'Wishlist', delegate: 'wishlist', fields: ['id', 'userId', 'productIds', 'createdAt', 'updatedAt'],
+  aliases: { user: 'userId', products: 'productIds' }, arrayFields: ['productIds'], defaults: { products: [] },
+  populate: { products: { model: () => Product, local: 'products', as: 'products', many: true } },
+});
 
-// ─── Cart ─────────────────────────────────────────────────────────────────────
-const cartSchema = new Schema(
-  {
-    user: { type: Schema.Types.ObjectId, ref: 'User', unique: true },
-    items: [{ product: { type: Schema.Types.ObjectId, ref: 'Product' }, quantity: { type: Number, default: 1 }, variant: String, price: Number }],
-  },
-  { timestamps: true }
-);
-export const Cart = mongoose.model('Cart', cartSchema);
+export const Banner: any = createCompatModel({
+  name: 'Banner', delegate: 'banner', fields: ['id', 'title', 'subtitle', 'image', 'link', 'isActive', 'showOnMobile', 'showOnWebsite', 'sortOrder', 'type', 'categoryId', 'createdAt', 'updatedAt'],
+  aliases: { category: 'categoryId' }, defaults: { title: null, subtitle: null, image: null, link: null, isActive: true, showOnMobile: true, showOnWebsite: true, sortOrder: 0, type: 'hero', category: null },
+  populate: { category: { model: () => Category, local: 'category', as: 'category' } },
+});
 
-// ─── Wishlist ─────────────────────────────────────────────────────────────────
-const wishlistSchema = new Schema(
-  { user: { type: Schema.Types.ObjectId, ref: 'User', unique: true }, products: [{ type: Schema.Types.ObjectId, ref: 'Product' }] },
-  { timestamps: true }
-);
-export const Wishlist = mongoose.model('Wishlist', wishlistSchema);
-
-// ─── Banner ───────────────────────────────────────────────────────────────────
-const bannerSchema = new Schema(
-  { 
-    title: String, 
-    subtitle: String, 
-    image: String, 
-    link: String, 
-    isActive: { type: Boolean, default: true }, 
-    showOnMobile: { type: Boolean, default: true },
-    showOnWebsite: { type: Boolean, default: true },
-    sortOrder: { type: Number, default: 0 }, 
-    type: { type: String, enum: ['hero','promo','category','hanging'], default: 'hero' },
-    category: { type: Schema.Types.ObjectId, ref: 'Category', default: null }
-  },
-  { timestamps: true }
-);
-export const Banner = mongoose.model('Banner', bannerSchema);
-
-// ─── Coupon ───────────────────────────────────────────────────────────────────
-const couponSchema = new Schema(
-  {
-    code: { type: String, required: true, unique: true, uppercase: true },
-    description: String,
-    discountType: { type: String, enum: ['percent', 'flat'], default: 'percent' },
-    discountValue: { type: Number, required: true },
-    minOrderAmount: { type: Number, default: 0 },
-    maxDiscount: Number,
-    usageLimit: { type: Number, default: 100 },
-    usedCount: { type: Number, default: 0 },
-    validFrom: Date,
-    validTill: Date,
-    isActive: { type: Boolean, default: true },
-  },
-  { timestamps: true }
-);
-export const Coupon = mongoose.model('Coupon', couponSchema);
+export const Coupon: any = createCompatModel({
+  name: 'Coupon', delegate: 'coupon', fields: ['id', 'code', 'description', 'discountType', 'discountValue', 'minOrderAmount', 'maxDiscount', 'usageLimit', 'usedCount', 'validFrom', 'validTill', 'isActive', 'createdAt', 'updatedAt'],
+  defaults: { description: null, discountType: 'percent', minOrderAmount: 0, maxDiscount: null, usageLimit: 100, usedCount: 0, validFrom: null, validTill: null, isActive: true },
+  beforeSave: doc => { if (doc.code) doc.code = String(doc.code).toUpperCase(); },
+});

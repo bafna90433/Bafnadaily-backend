@@ -1,12 +1,12 @@
-import mongoose from 'mongoose';
+import { connectPostgres } from '../db/prisma';
 
 const connectDB = async (): Promise<void> => {
+  if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required');
   try {
-    const conn = await mongoose.connect(process.env.MONGO_URI as string);
-    console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+    await connectPostgres();
   } catch (error: any) {
-    console.error(`❌ MongoDB Error: ${error.message}`);
-    process.exit(1);
+    console.error(`❌ PostgreSQL Error: ${error.message}`);
+    throw error;
   }
 };
 

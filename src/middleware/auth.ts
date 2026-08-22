@@ -36,7 +36,7 @@ export const adminProtect = async (req: AuthRequest, res: Response, next: NextFu
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.ADMIN_JWT_SECRET as string) as TokenPayload;
+    const decoded = jwt.verify(token, (process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET) as string) as TokenPayload;
     req.admin = await Admin.findById(decoded.id).select('-password');
     if (!req.admin) return res.status(401).json({ success: false, message: 'Admin not found' });
     if (!req.admin.isActive) return res.status(403).json({ success: false, message: 'Admin account disabled' });

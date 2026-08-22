@@ -1,0 +1,380 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Category {
+  id              String     @id @default(cuid())
+  name            String
+  slug            String     @unique
+  description     String?
+  image           String?
+  imageFileId     String?
+  icon            String?
+  parentId        String?
+  parentRef       Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children        Category[] @relation("CategoryTree")
+  layoutType      String     @default("standard")
+  isActive        Boolean    @default(true)
+  sortOrder       Int        @default(0)
+  featured        Boolean    @default(false)
+  banner          String?
+  isDashboardMain Boolean    @default(false)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  products        Product[]  @relation("ProductCategory")
+  subProducts     Product[]  @relation("ProductSubCategory")
+  banners         Banner[]
+
+  @@index([parentId])
+  @@index([isActive, sortOrder])
+}
+
+model Product {
+  id               String         @id @default(cuid())
+  name             String
+  slug             String         @unique
+  description      String
+  shortDescription String?
+  images           Json           @default("[]")
+  categoryId       String?
+  categoryRef      Category?      @relation("ProductCategory", fields: [categoryId], references: [id], onDelete: SetNull)
+  subCategoryId    String?
+  subCategoryRef   Category?      @relation("ProductSubCategory", fields: [subCategoryId], references: [id], onDelete: SetNull)
+  tags             String[]       @default([])
+  price            Float
+  mrp              Float
+  discount         Float          @default(0)
+  stock            Int            @default(0)
+  sku              String?        @unique
+  variants         Json           @default("[]")
+  reviews          Json           @default("[]")
+  averageRating    Float          @default(0)
+  numReviews       Int            @default(0)
+  isActive         Boolean        @default(true)
+  isFeatured       Boolean        @default(false)
+  isTrending       Boolean        @default(false)
+  isNewArrival     Boolean        @default(false)
+  isBestSeller     Boolean        @default(false)
+  giftWrapping     Boolean        @default(false)
+  isDeleted        Boolean        @default(false)
+  material         String?
+  colors           Json           @default("[]")
+  weight           Float?
+  sold             Int            @default(0)
+  barcode          String?        @unique
+  minQty           Int            @default(1)
+  reorderLevel     Int            @default(0)
+  perPiecePrice    String?
+  perPacketText    String?
+  gstRate          Float          @default(0)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  inventoryLogs    InventoryLog[]
+  deals            DealOfDay[]
+
+  @@index([categoryId])
+  @@index([isActive, isDeleted, createdAt])
+  @@index([name])
+  @@index([barcode])
+}
+
+model User {
+  id                String    @id @default(cuid())
+  name              String    @default("")
+  phone             String?   @unique
+  email             String?   @unique
+  googleId          String?   @unique
+  avatar            String    @default("")
+  addresses         Json      @default("[]")
+  isActive          Boolean   @default(true)
+  isBlocked         Boolean   @default(false)
+  blockReason       String?
+  lastLogin         DateTime?
+  customerType      String    @default("retail")
+  isSpecialCustomer Boolean   @default(false)
+  codEnabled        Boolean   @default(true)
+  creditLimit       Float     @default(0)
+  gstNumber         String?
+  businessName      String?
+  whatsapp          String?
+  visitingCard      String?
+  totalOrders       Int       @default(0)
+  totalSpent        Float     @default(0)
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  orders            Order[]
+  cart              Cart?
+  wishlist          Wishlist?
+  visits            Visitor[]
+}
+
+model Otp {
+  id        String   @id @default(cuid())
+  phone     String
+  otp       String
+  expiresAt DateTime @default(dbgenerated("NOW() + INTERVAL '10 minutes'"))
+
+  @@index([phone, otp])
+  @@index([expiresAt])
+}
+
+model Admin {
+  id        String    @id @default(cuid())
+  name      String
+  email     String    @unique
+  password  String
+  role      String    @default("admin")
+  isActive  Boolean   @default(true)
+  lastLogin DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Order {
+  id                String    @id @default(cuid())
+  orderNumber       String    @unique
+  userId            String?
+  userRef           User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  items             Json      @default("[]")
+  gstin             String    @default("")
+  shippingAddress   Json      @default("{}")
+  paymentMethod     String    @default("cod")
+  paymentStatus     String    @default("pending")
+  paymentId         String?
+  rzOrderId         String    @default("")
+  orderStatus       String    @default("placed")
+  statusHistory     Json      @default("[]")
+  subtotal          Float     @default(0)
+  shippingCharge    Float     @default(0)
+  discount          Float     @default(0)
+  couponCode        String?
+  total             Float     @default(0)
+  advanceAmount     Float     @default(0)
+  giftWrapping      Boolean   @default(false)
+  giftMessage       String?
+  notes             String?
+  trackingNumber    String    @default("")
+  courierName       String    @default("")
+  packingDetails    Json      @default("[]")
+  wa                Json      @default("{}")
+  estimatedDelivery DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([orderStatus, createdAt])
+  @@index([paymentId])
+  @@index([rzOrderId])
+}
+
+model Cart {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  userRef   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     Json     @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Wishlist {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  userRef    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productIds String[] @default([])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Banner {
+  id            String    @id @default(cuid())
+  title         String?
+  subtitle      String?
+  image         String?
+  link          String?
+  isActive      Boolean   @default(true)
+  showOnMobile  Boolean   @default(true)
+  showOnWebsite Boolean   @default(true)
+  sortOrder     Int       @default(0)
+  type          String    @default("hero")
+  categoryId    String?
+  categoryRef   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([isActive, sortOrder])
+}
+
+model Coupon {
+  id             String    @id @default(cuid())
+  code           String    @unique
+  description    String?
+  discountType   String    @default("percent")
+  discountValue  Float
+  minOrderAmount Float     @default(0)
+  maxDiscount    Float?
+  usageLimit     Int       @default(100)
+  usedCount      Int       @default(0)
+  validFrom      DateTime?
+  validTill      DateTime?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model SiteSettings {
+  id                     String   @id @default(cuid())
+  siteName               String   @default("Reteiler")
+  siteTagline            String   @default("Gifts & Accessories")
+  siteLogo               String   @default("")
+  siteLogoFileId         String   @default("")
+  favicon                String   @default("")
+  whatsappNumber         String   @default("7550350036")
+  whatsappEnabled        Boolean  @default(true)
+  supportEmail           String   @default("support@reteiler.in")
+  supportPhone           String   @default("")
+  homepageSections       Json     @default("{}")
+  razorpay               Json     @default("{}")
+  codEnabled             Boolean  @default(true)
+  codAdvancePercent      Float    @default(30)
+  codFlatCharge          Float    @default(0)
+  upiEnabled             Boolean  @default(true)
+  upiId                  String   @default("")
+  shiprocket             Json     @default("{}")
+  nimbuspost             Json     @default("{}")
+  freeShippingAbove      Float    @default(499)
+  standardShippingCharge Float    @default(49)
+  giftWrapCharge         Float    @default(29)
+  promoText              String   @default("Free Delivery on orders above 499 | COD Available")
+  b2bEnabled             Boolean  @default(true)
+  moqPolicy              Json     @default("{}")
+  subdomain              String?  @unique
+  customDomain           String?  @unique
+  adminSubdomain         String?  @unique
+  adminCustomDomain      String?  @unique
+  maintenanceMode        Boolean  @default(false)
+  maintenanceMessage     String   @default("We are upgrading our store. Back soon!")
+  hapticFeedback         Boolean  @default(true)
+  homeLayout             Int      @default(4)
+  websiteLayout          Int      @default(4)
+  mobileLayout           Int      @default(1)
+  metaPixelId            String   @default("")
+  metaPixelEnabled       Boolean  @default(false)
+  googleAnalyticsId      String   @default("")
+  googleAnalyticsEnabled Boolean  @default(false)
+  deletePassword         String   @default("")
+  editPassword           String   @default("")
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+}
+
+model Visitor {
+  id        String   @id @default(cuid())
+  ip        String
+  userAgent String   @default("")
+  page      String
+  referrer  String?
+  state     String   @default("Unknown")
+  city      String   @default("Unknown")
+  country   String   @default("India")
+  device    String   @default("desktop")
+  browser   String?
+  sessionId String
+  userId    String?
+  userRef   User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sessionId])
+  @@index([createdAt])
+  @@index([state])
+  @@index([ip, createdAt])
+}
+
+model InventoryLog {
+  id         String   @id @default(cuid())
+  productId  String?
+  productRef Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  type       String
+  quantity   Int
+  oldStock   Int
+  newStock   Int
+  note       String?
+  createdAt  DateTime @default(now())
+
+  @@index([productId, createdAt])
+}
+
+model StaffFolder {
+  id        String          @id @default(cuid())
+  name      String
+  parentId  String?
+  parentRef StaffFolder?    @relation("StaffFolderTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  StaffFolder[]   @relation("StaffFolderTree")
+  staffName String          @default("Staff")
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  reports   StaffReport[]
+  feedback  StaffFeedback[]
+
+  @@index([parentId])
+}
+
+model StaffReport {
+  id          String          @id @default(cuid())
+  imageUrl    String
+  fileId      String?
+  staffName   String          @default("Staff")
+  productCode String?
+  folderId    String?
+  folderRef   StaffFolder?    @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  feedback    StaffFeedback[]
+
+  @@index([folderId, createdAt])
+}
+
+model StaffFeedback {
+  id            String       @id @default(cuid())
+  folderId      String?
+  folderRef     StaffFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  reportId      String?
+  reportRef     StaffReport? @relation(fields: [reportId], references: [id], onDelete: SetNull)
+  message       String       @default("")
+  sender        String
+  staffName     String       @default("Staff")
+  isRead        Boolean      @default(false)
+  audioUrl      String?
+  audioDuration Float        @default(0)
+  createdAt     DateTime     @default(now())
+
+  @@index([folderId, createdAt])
+  @@index([reportId])
+}
+
+model DealOfDay {
+  id            String   @id @default(cuid())
+  productId     String
+  productRef    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  discountType  String
+  discountValue Float
+  dealPrice     Float
+  endTime       DateTime
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([isActive, endTime])
+}
+
+model MigrationState {
+  id          String   @id
+  completedAt DateTime @default(now())
+  details     Json     @default("{}")
+}

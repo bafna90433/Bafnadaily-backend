@@ -1,25 +1,10 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import { createCompatModel } from '../db/compat';
+import { Product } from './Product';
 
-export interface IInventoryLog extends Document {
-  productId: mongoose.Types.ObjectId;
-  type: 'inward' | 'outward';
-  quantity: number;
-  oldStock: number;
-  newStock: number;
-  note?: string;
-  createdAt: Date;
-}
+export type IInventoryLog = any;
 
-const inventoryLogSchema = new Schema<IInventoryLog>(
-  {
-    productId: { type: Schema.Types.ObjectId, ref: 'Product', required: true, index: true },
-    type: { type: String, enum: ['inward', 'outward'], required: true },
-    quantity: { type: Number, required: true },
-    oldStock: { type: Number, required: true },
-    newStock: { type: Number, required: true },
-    note: String,
-  },
-  { timestamps: { createdAt: true, updatedAt: false } }
-);
-
-export const InventoryLog = mongoose.model<IInventoryLog>('InventoryLog', inventoryLogSchema);
+export const InventoryLog: any = createCompatModel({
+  name: 'InventoryLog', delegate: 'inventoryLog', fields: ['id', 'productId', 'type', 'quantity', 'oldStock', 'newStock', 'note', 'createdAt'],
+  defaults: { productId: null, note: null },
+  populate: { productId: { model: () => Product, local: 'productId', as: 'productId' } },
+});

@@ -1,128 +1,37 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import { createCompatModel } from '../db/compat';
+import { User } from './User';
 
-// ─── Category ─────────────────────────────────────────────────────────────────
-export interface ICategory extends Document {
-  name: string;
-  slug: string;
-  description?: string;
-  image?: string;
-  icon?: string;
-  parent?: mongoose.Types.ObjectId;
-  layoutType?: 'standard' | 'hanging';
-  isActive: boolean;
-  sortOrder: number;
-  featured: boolean;
-  banner?: string;
-  isDashboardMain: boolean;
-}
+export type ICategory = any;
+export type IProduct = any;
 
-const categorySchema = new Schema<ICategory>(
-  {
-    name: { type: String, required: true, trim: true },
-    slug: { type: String, required: true, unique: true, lowercase: true },
-    description: String,
-    image: String,
-    icon: String,
-    parent: { type: Schema.Types.ObjectId, ref: 'Category', default: null },
-    layoutType: { type: String, enum: ['standard', 'hanging'], default: 'standard' },
-    isActive: { type: Boolean, default: true },
-    sortOrder: { type: Number, default: 0 },
-    featured: { type: Boolean, default: false },
-    banner: String,
-    isDashboardMain: { type: Boolean, default: false },
-  },
-  { timestamps: true }
-);
-
-export const Category = mongoose.model<ICategory>('Category', categorySchema);
-
-// ─── Product ──────────────────────────────────────────────────────────────────
-export interface IProduct extends Document {
-  name: string;
-  slug: string;
-  description: string;
-  shortDescription?: string;
-  images: { url: string; fileId?: string; colorName?: string }[];
-  category: mongoose.Types.ObjectId;
-  subCategory?: mongoose.Types.ObjectId;
-  tags: string[];
-  price: number;
-  mrp: number;
-  discount: number;
-  stock: number;
-  sku?: string;
-  variants: { name: string; value: string; additionalPrice: number; stock: number; sku?: string }[];
-  reviews: { user: mongoose.Types.ObjectId; rating: number; comment: string; images?: string[]; createdAt?: Date }[];
-  averageRating: number;
-  numReviews: number;
-  isActive: boolean;
-  isFeatured: boolean;
-  isTrending: boolean;
-  isNewArrival: boolean;
-  isBestSeller: boolean;
-  giftWrapping: boolean;
-  isDeleted: boolean;
-  material?: string;
-  colors: { name: string; hex: string }[];
-  weight?: number;
-  sold: number;
-  barcode?: string;
-  minQty: number;
-  reorderLevel?: number;
-  perPiecePrice?: string;
-  perPacketText?: string;
-  gstRate?: number;
-}
-
-const productSchema = new Schema<IProduct>(
-  {
-    name: { type: String, required: true, trim: true },
-    slug: { type: String, required: true, unique: true, lowercase: true },
-    description: { type: String, required: true },
-    shortDescription: String,
-    images: [{ url: String, fileId: String, colorName: String }],
-    category: { type: Schema.Types.ObjectId, ref: 'Category', required: true },
-    subCategory: { type: Schema.Types.ObjectId, ref: 'Category' },
-    tags: [String],
-    price: { type: Number, required: true },
-    mrp: { type: Number, required: true },
-    discount: { type: Number, default: 0 },
-    stock: { type: Number, default: 0 },
-    sku: { type: String, sparse: true },
-    variants: [{ name: String, value: String, additionalPrice: { type: Number, default: 0 }, stock: { type: Number, default: 0 }, sku: String }],
-    reviews: [{ user: { type: Schema.Types.ObjectId, ref: 'User' }, rating: { type: Number, min: 1, max: 5 }, comment: String, images: [String], createdAt: { type: Date, default: Date.now } }],
-    averageRating: { type: Number, default: 0 },
-    numReviews: { type: Number, default: 0 },
-    isActive: { type: Boolean, default: true },
-    isFeatured: { type: Boolean, default: false },
-    isTrending: { type: Boolean, default: false },
-    isNewArrival: { type: Boolean, default: false },
-    isBestSeller: { type: Boolean, default: false },
-    giftWrapping: { type: Boolean, default: false },
-    isDeleted: { type: Boolean, default: false },
-    material: String,
-    colors: [{ name: String, hex: String }],
-    weight: Number,
-    sold: { type: Number, default: 0 },
-    barcode: { type: String, unique: true, sparse: true },
-    minQty: { type: Number, default: 1, min: 1 },
-    reorderLevel: { type: Number, default: 0 },
-    perPiecePrice: String,
-    perPacketText: String,
-    gstRate: { type: Number, default: 0, enum: [0, 5, 12, 18, 28] },
-  },
-  { timestamps: true }
-);
-
-productSchema.pre('save', function (next) {
-  if (this.reviews.length > 0) {
-    this.averageRating = this.reviews.reduce((a: number, b: any) => a + b.rating, 0) / this.reviews.length;
-    this.numReviews = this.reviews.length;
-  }
-  if (this.mrp > 0) this.discount = Math.round(((this.mrp - this.price) / this.mrp) * 100);
-  next();
+export const Category: any = createCompatModel({
+  name: 'Category', delegate: 'category',
+  fields: ['id', 'name', 'slug', 'description', 'image', 'imageFileId', 'icon', 'parentId', 'layoutType', 'isActive', 'sortOrder', 'featured', 'banner', 'isDashboardMain', 'createdAt', 'updatedAt'],
+  aliases: { parent: 'parentId' },
+  defaults: { description: null, image: null, imageFileId: null, icon: null, parent: null, layoutType: 'standard', isActive: true, sortOrder: 0, featured: false, banner: null, isDashboardMain: false },
+  beforeSave: doc => { if (doc.slug) doc.slug = String(doc.slug).toLowerCase(); },
+  populate: { parent: { model: () => Category, local: 'parent', as: 'parent' } },
 });
-
-productSchema.index({ name: 'text', description: 'text', tags: 'text', barcode: 'text' });
-
-export const Product = mongoose.model<IProduct>('Product', productSchema);
+export const Product: any = createCompatModel({
+  name: 'Product', delegate: 'product',
+  fields: ['id', 'name', 'slug', 'description', 'shortDescription', 'images', 'categoryId', 'subCategoryId', 'tags', 'price', 'mrp', 'discount', 'stock', 'sku', 'variants', 'reviews', 'averageRating', 'numReviews', 'isActive', 'isFeatured', 'isTrending', 'isNewArrival', 'isBestSeller', 'giftWrapping', 'isDeleted', 'material', 'colors', 'weight', 'sold', 'barcode', 'minQty', 'reorderLevel', 'perPiecePrice', 'perPacketText', 'gstRate', 'createdAt', 'updatedAt'],
+  aliases: { category: 'categoryId', subCategory: 'subCategoryId' },
+  arrayFields: ['tags'],
+  jsonFields: ['images', 'variants', 'reviews', 'colors'],
+  subdocumentArrays: ['images', 'variants', 'reviews', 'colors'],
+  defaults: { description: '', shortDescription: null, images: [], category: null, subCategory: null, tags: [], price: 0, mrp: 0, discount: 0, stock: 0, sku: null, variants: [], reviews: [], averageRating: 0, numReviews: 0, isActive: true, isFeatured: false, isTrending: false, isNewArrival: false, isBestSeller: false, giftWrapping: false, isDeleted: false, material: null, colors: [], weight: null, sold: 0, barcode: null, minQty: 1, reorderLevel: 0, perPiecePrice: null, perPacketText: null, gstRate: 0 },
+  beforeSave: doc => {
+    doc.images ||= []; doc.variants ||= []; doc.reviews ||= []; doc.colors ||= []; doc.tags ||= [];
+    doc.numReviews = doc.reviews.length;
+    doc.averageRating = doc.reviews.length ? doc.reviews.reduce((sum: number, review: any) => sum + Number(review.rating || 0), 0) / doc.reviews.length : 0;
+    if (Number(doc.mrp) > 0) doc.discount = Math.round(((Number(doc.mrp) - Number(doc.price)) / Number(doc.mrp)) * 100);
+    if (doc.slug) doc.slug = String(doc.slug).toLowerCase();
+    if (doc.sku === '') doc.sku = null;
+    if (doc.barcode === '') doc.barcode = null;
+  },
+  populate: {
+    category: { model: () => Category, local: 'category', as: 'category' },
+    subCategory: { model: () => Category, local: 'subCategory', as: 'subCategory' },
+    'reviews.user': { model: () => User, local: 'reviews', jsonArray: 'reviews', jsonField: 'user' },
+  },
+});
