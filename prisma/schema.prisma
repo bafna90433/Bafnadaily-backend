@@ -251,7 +251,7 @@ model SiteSettings {
   standardShippingCharge Float    @default(49)
   giftWrapCharge         Float    @default(29)
   promoText              String   @default("Free Delivery on orders above 499 | COD Available")
-  b2bEnabled             Boolean  @default(true)
+  b2bEnabled             Boolean  @default(false)
   moqPolicy              Json     @default("{}")
   subdomain              String?  @unique
   customDomain           String?  @unique

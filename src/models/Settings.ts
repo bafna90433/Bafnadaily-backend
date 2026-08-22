@@ -13,7 +13,7 @@ export const SiteSettings: any = createCompatModel({
     shiprocket: { enabled: false, email: '', password: '', channelId: '', token: '', tokenExpiry: null },
     nimbuspost: { enabled: false, email: '', password: '', pickupWarehouseName: 'Primary', pickupContactName: '', pickupAddress: '', pickupCity: '', pickupState: '', pickupPincode: '', pickupPhone: '', token: '', tokenExpiry: null },
     freeShippingAbove: 499, standardShippingCharge: 49, giftWrapCharge: 29, promoText: '🚚 Free Delivery on orders above ₹499 | COD Available 🎁',
-    b2bEnabled: true, moqPolicy: { belowPrice: 60, belowPriceQty: 3, abovePriceQty: 2 }, subdomain: null, customDomain: null, adminSubdomain: null, adminCustomDomain: null,
+    b2bEnabled: false, moqPolicy: { belowPrice: 60, belowPriceQty: 3, abovePriceQty: 2 }, subdomain: null, customDomain: null, adminSubdomain: null, adminCustomDomain: null,
     maintenanceMode: false, maintenanceMessage: 'We are upgrading our store. Back soon!', hapticFeedback: true, homeLayout: 4, websiteLayout: 4, mobileLayout: 1,
     metaPixelId: '', metaPixelEnabled: false, googleAnalyticsId: '', googleAnalyticsEnabled: false, deletePassword: '', editPassword: '',
   },
